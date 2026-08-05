@@ -1,0 +1,66 @@
+/* ============================================================
+   FluxTime Design Tokens — Neumorfismo
+   ============================================================ */
+
+:root {
+  /* --- Cores principais --- */
+  --fx-bg:          #e7eaef;   /* fundo da aplicação / mesa */
+  --fx-surface:     #e9ecf1;   /* superfície de cards e janela */
+  --fx-accent:      #7a1226;   /* cor de marca (vinho) */
+  --fx-error:       #b6472f;   /* alerta / erro */
+  --fx-divider:     rgba(163, 177, 198, 0.22); /* 1px */
+
+  /* --- Texto --- */
+  --fx-text-1:      #6b7280;   /* texto primário */
+  --fx-text-2:      #8a9099;   /* texto secundário */
+  --fx-text-3:      #aab0ba;   /* labels / terciário */
+  --fx-text-4:      #b0b6c0;   /* desabilitado leve */
+  --fx-text-5:      #b6bcc6;   /* texto vazio */
+  --fx-text-dis:    #c2c8d1;   /* desabilitado */
+  --fx-text-input:  #5f666f;   /* texto em input */
+  --fx-placeholder: #a8aeb8;   /* placeholder */
+
+  /* --- Semáforo de prazo / severidade --- */
+  --fx-green:       #4f9d69;
+  --fx-yellow:      #c9a227;
+  --fx-orange:      #cc7a33;
+  --fx-red:         #bc4f3c;
+
+  /* --- Sombras neumorfismo (relevo) --- */
+  --shadow-window:   18px 18px 40px rgba(163, 177, 198, 0.55), -14px -14px 34px #ffffff;
+  --shadow-card-lg:  6px 6px 15px rgba(163, 177, 198, 0.5), -6px -6px 15px #ffffff;
+  --shadow-card:     6px 6px 14px rgba(163, 177, 198, 0.45), -6px -6px 14px #ffffff;
+  --shadow-btn-sm:   4px 4px 10px rgba(163, 177, 198, 0.5), -4px -4px 10px #ffffff;
+  --shadow-chip:     3px 3px 8px rgba(163, 177, 198, 0.45), -3px -3px 8px #ffffff;
+  --shadow-sheet:    0 -12px 30px rgba(163, 177, 198, 0.4);
+
+  /* --- Sombras neumorfismo (inset / afundado) --- */
+  --shadow-inset-field:  inset 4px 4px 9px rgba(163, 177, 198, 0.5), inset -4px -4px 9px #ffffff;
+  --shadow-inset-chip:   inset 3px 3px 7px rgba(163, 177, 198, 0.55), inset -3px -3px 7px #ffffff;
+  --shadow-inset-btn:    inset 5px 5px 11px rgba(163, 177, 198, 0.6), inset -5px -5px 11px #ffffff;
+  --shadow-inset-login:  inset 5px 5px 11px rgba(163, 177, 198, 0.55), inset -5px -5px 11px #ffffff;
+
+  /* --- Tipografia --- */
+  --font: 'Montserrat', Helvetica, sans-serif;
+
+  /* --- Espaçamento --- */
+  --px: 26px;           /* padding horizontal padrão */
+
+  /* --- Raios --- */
+  --radius-window: 22px;
+  --radius-card:   20px;
+  --radius-card-lg: 24px;
+  --radius-chip:   12px;
+  --radius-btn-sq: 12px;
+  --radius-avatar: 50%;
+
+  /* --- Alturas fixas --- */
+  --h-titlebar: 40px;
+  --h-field:    44px;
+  --h-field-lg: 48px;
+  --h-field-login: 58px;
+  --h-btn-main: 52px;
+  --h-navbar:   58px;
+  --h-fab:      56px;
+  --h-playpause: 52px;
+}

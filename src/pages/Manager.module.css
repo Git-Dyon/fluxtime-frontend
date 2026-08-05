@@ -1,0 +1,285 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 26px 14px;
+  flex-shrink: 0;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.perfil {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  color: var(--fx-text-3);
+  display: block;
+}
+
+.nome {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fx-text-1);
+}
+
+.equipeBtn {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 19px;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fx-text-2);
+  font-family: var(--font);
+  transition: box-shadow 0.12s;
+}
+.equipeBtn:active { box-shadow: var(--shadow-inset-btn); }
+
+.scrollArea {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 26px;
+  padding-bottom: 0;
+}
+
+.activityCard {
+  border-radius: 24px;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card-lg);
+  padding: 18px;
+  margin-bottom: 20px;
+}
+
+.activityTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.activityLabel {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  color: var(--fx-text-3);
+}
+
+.activityStatus {
+  font-size: 11px;
+  color: var(--fx-text-3);
+}
+
+.activityRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.playBtn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: box-shadow 0.12s;
+}
+
+.playBtn:active, .playBtn.playing { box-shadow: var(--shadow-inset-btn); }
+
+.timerRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.timer {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--fx-text-1);
+  letter-spacing: 1px;
+}
+
+.timerSub {
+  font-size: 13px;
+  color: var(--fx-text-3);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  margin-top: 4px;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fx-text-1);
+  letter-spacing: 0.3px;
+}
+
+.sectionCount {
+  font-size: 11px;
+  color: var(--fx-text-3);
+}
+
+.filtros {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+}
+
+.taskCard {
+  border-radius: 20px;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card);
+  padding: 14px 14px 14px 14px;
+  position: relative;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: box-shadow 0.12s;
+}
+
+.vazio {
+  font-size: 12.5px;
+  color: var(--fx-text-dis);
+  text-align: center;
+  padding: 24px 0;
+}
+
+/* Navbar */
+.navbar {
+  height: var(--h-navbar);
+  margin: 0 26px 22px;
+  border-radius: 29px;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card-lg);
+  display: flex;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.navItem {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fx-text-3);
+  cursor: pointer;
+  border-radius: 29px;
+  transition: box-shadow 0.15s, color 0.15s;
+}
+
+.navActive {
+  box-shadow: var(--shadow-inset-field);
+  color: var(--fx-accent);
+}
+
+/* Equipe monitor */
+.equipeRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.equipeRow:hover { background: rgba(163,177,198,0.1); }
+
+.membroNome {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--fx-text-1);
+}
+
+.membroHoras {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fx-text-2);
+}
+
+/* Monitor individual */
+.backBtn {
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: var(--fx-text-2);
+  cursor: pointer;
+  font-family: var(--font);
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.monitorCard {
+  border-radius: 20px;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card);
+  padding: 18px;
+}
+
+.monitorTitulo {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fx-text-1);
+  margin: 8px 0 4px;
+}
+
+.monitorTimer {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--fx-text-1);
+}
+
+.monitorTask {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--fx-divider);
+}
+
+.equipeLabel {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--fx-text-3);
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* Sheet nova task */
+.fieldLabel {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--fx-text-3);
+  display: block;
+  margin-bottom: 0;
+}

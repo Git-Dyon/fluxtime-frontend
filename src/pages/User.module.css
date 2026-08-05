@@ -1,0 +1,247 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 26px 14px;
+  flex-shrink: 0;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.perfil {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  color: var(--fx-text-3);
+  display: block;
+}
+
+.nome {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fx-text-1);
+}
+
+.hojeArea {
+  text-align: right;
+}
+
+.hojeLabel {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--fx-text-3);
+  display: block;
+}
+
+.hojeTotal {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--fx-text-1);
+}
+
+.scrollArea {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 26px;
+}
+
+.createCard {
+  border-radius: 24px;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card-lg);
+  padding: 18px;
+  margin-bottom: 20px;
+}
+
+.createTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.createLabel {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  color: var(--fx-text-3);
+}
+
+.createSub {
+  font-size: 11px;
+  color: var(--fx-text-3);
+}
+
+.createRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.playBtn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: box-shadow 0.12s;
+}
+.playBtn:active { box-shadow: var(--shadow-inset-btn); }
+.playBtn:disabled { opacity: 0.5; }
+
+.detalhesBtn {
+  width: 100%;
+  height: 40px;
+  border-radius: 20px;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card);
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fx-accent);
+  font-family: var(--font);
+  transition: box-shadow 0.12s;
+}
+.detalhesBtn:active { box-shadow: var(--shadow-inset-btn); }
+
+.execLabel {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  color: var(--fx-text-3);
+  margin-bottom: 10px;
+}
+
+.focoCard {
+  border-radius: 24px;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card-lg);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.focoClock {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--fx-text-1);
+  flex: 1;
+  letter-spacing: 1px;
+}
+
+.playBtnLg {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: box-shadow 0.12s;
+}
+.playBtnLg.playing, .playBtnLg:active { box-shadow: var(--shadow-inset-btn); }
+
+.semFoco {
+  border-radius: 20px;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-inset-field);
+  padding: 34px 20px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+.semFoco p { font-size: 13px; color: var(--fx-text-2); margin-bottom: 6px; }
+.semFoco span { font-size: 11px; color: var(--fx-text-4); }
+
+.taskHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fx-text-1);
+}
+
+.sectionCount {
+  font-size: 11px;
+  color: var(--fx-text-3);
+}
+
+.vazio {
+  font-size: 12.5px;
+  color: var(--fx-text-dis);
+  text-align: center;
+  padding: 24px 0;
+}
+
+.taskCard {
+  border-radius: 20px;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card);
+  padding: 14px;
+  position: relative;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.navbar {
+  height: var(--h-navbar);
+  margin: 0 26px 22px;
+  border-radius: 29px;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card-lg);
+  display: flex;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.navItem {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fx-text-3);
+  cursor: pointer;
+  border-radius: 29px;
+  transition: box-shadow 0.15s, color 0.15s;
+}
+
+.navActive {
+  box-shadow: var(--shadow-inset-field);
+  color: var(--fx-accent);
+}
+
+.fieldLabel {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--fx-text-3);
+  display: block;
+}

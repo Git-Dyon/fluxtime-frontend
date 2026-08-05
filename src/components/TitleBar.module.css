@@ -1,0 +1,41 @@
+.bar {
+  height: var(--h-titlebar);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 0 20px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+.label {
+  font-size: 10px;
+  letter-spacing: 2.4px;
+  text-transform: uppercase;
+  color: var(--fx-text-4);
+  font-weight: 600;
+}
+
+.controls {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+
+.btn {
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  color: var(--fx-text-4);
+  background: none;
+  border: none;
+  font-family: var(--font);
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: color 0.12s;
+}
+
+.btn:hover { color: var(--fx-text-1); }
+.btn.close:hover { color: var(--fx-error); }
