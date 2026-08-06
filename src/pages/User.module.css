@@ -50,6 +50,9 @@
   flex: 1;
   overflow-y: auto;
   padding: 0 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .createCard {
@@ -101,8 +104,14 @@
   flex-shrink: 0;
   transition: box-shadow 0.12s;
 }
-.playBtn:active { box-shadow: var(--shadow-inset-btn); }
-.playBtn:disabled { opacity: 0.5; }
+
+.playBtn:active {
+  box-shadow: var(--shadow-inset-btn);
+}
+
+.playBtn:disabled {
+  opacity: 0.5;
+}
 
 .detalhesBtn {
   width: 100%;
@@ -118,7 +127,10 @@
   font-family: var(--font);
   transition: box-shadow 0.12s;
 }
-.detalhesBtn:active { box-shadow: var(--shadow-inset-btn); }
+
+.detalhesBtn:active {
+  box-shadow: var(--shadow-inset-btn);
+}
 
 .execLabel {
   font-size: 9px;
@@ -159,7 +171,11 @@
   flex-shrink: 0;
   transition: box-shadow 0.12s;
 }
-.playBtnLg.playing, .playBtnLg:active { box-shadow: var(--shadow-inset-btn); }
+
+.playBtnLg.playing,
+.playBtnLg:active {
+  box-shadow: var(--shadow-inset-btn);
+}
 
 .semFoco {
   border-radius: 20px;
@@ -169,8 +185,17 @@
   text-align: center;
   margin-bottom: 16px;
 }
-.semFoco p { font-size: 13px; color: var(--fx-text-2); margin-bottom: 6px; }
-.semFoco span { font-size: 11px; color: var(--fx-text-4); }
+
+.semFoco p {
+  font-size: 13px;
+  color: var(--fx-text-2);
+  margin-bottom: 6px;
+}
+
+.semFoco span {
+  font-size: 11px;
+  color: var(--fx-text-4);
+}
 
 .taskHeader {
   display: flex;
@@ -201,9 +226,9 @@
   border-radius: 20px;
   background: var(--fx-surface);
   box-shadow: var(--shadow-card);
-  padding: 14px;
+  padding: 12px 14px;
   position: relative;
-  margin-bottom: 10px;
+  margin-bottom: 0;
   cursor: pointer;
 }
 
@@ -244,4 +269,31 @@
   text-transform: uppercase;
   color: var(--fx-text-3);
   display: block;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sairBtn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-btn-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  color: var(--fx-text-4);
+  transition: color 0.12s, box-shadow 0.12s;
+}
+.sairBtn:hover {
+  color: var(--fx-error);
+}
+.sairBtn:active {
+  box-shadow: var(--shadow-inset-btn);
 }

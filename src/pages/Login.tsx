@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { TitleBar } from '../components/TitleBar';
 import { api, setToken } from '../lib/api';
-import { AuthResponse } from '../lib/types';
+import type { AuthResponse } from '../lib/types';
 import styles from './Login.module.css';
 
 interface Props {

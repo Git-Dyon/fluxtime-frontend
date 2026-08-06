@@ -1,4 +1,4 @@
-import { Severidade, Status } from './types';
+import type { Severidade, Status } from './types';
 
 export function initials(nome: string): string {
   const parts = nome.trim().split(/\s+/);
@@ -21,8 +21,24 @@ export function formatHM(s: number): string {
   return `${h}h ${String(m).padStart(2, '0')}m`;
 }
 
+export const STATUS_LABELS: Record<Status, string> = {
+  BACK_LOG: 'Back Log',
+  ATUANDO: 'Atuando',
+  EM_TESTES: 'Em testes',
+  LIBERADO_PARA_QA: 'Liberado para QA',
+  DEPLOY: 'Deploy',
+  CONCLUIDO: 'Concluído',
+};
+
+export const SEVERIDADE_LABELS: Record<Severidade, string> = {
+  BAIXA: 'Baixa',
+  MEDIA: 'Média',
+  ALTA: 'Alta',
+  CRITICA: 'Crítica',
+};
+
 export function deadlineClass(dataFinal: string, status: Status): 'green' | 'yellow' | 'orange' | 'red' {
-  if (status === 'Concluído') return 'green';
+  if (status === 'CONCLUIDO') return 'green';
   const diff = (new Date(dataFinal).getTime() - Date.now()) / 1000;
   if (diff > 3 * 86400) return 'green';
   if (diff > 1.5 * 86400) return 'yellow';
@@ -39,7 +55,7 @@ export function deadlineLabel(dataFinal: string): string {
 }
 
 export function severidadeColor(sev: Severidade): string {
-  return { Baixa: 'green', Média: 'yellow', Alta: 'orange', Crítica: 'red' }[sev] as string;
+  return { BAIXA: 'green', MEDIA: 'yellow', ALTA: 'orange', CRITICA: 'red' }[sev] as string;
 }
 
 export function calcTotalSeconds(task: { segundosExecutados: number; rodando: boolean; iniciadoEm: number | null }, now: number): number {

@@ -1,20 +1,21 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { TitleBar } from '../components/TitleBar';
 import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
-import { api, clearToken } from '../lib/api';
-import { Task, User } from '../lib/types';
+import { api, uploadFile, downloadFile } from '../lib/api';
+import { subscribeTaskEvents } from '../lib/socket';
+import type { Task, User } from '../lib/types';
 import { useNow } from '../hooks/useNow';
 import {
   calcTotalSeconds, deadlineClass, deadlineLabel,
-  formatSeconds, formatHM, severidadeColor
+  formatSeconds, formatHM, severidadeColor, STATUS_LABELS, SEVERIDADE_LABELS
 } from '../lib/utils';
 import styles from './Manager.module.css';
 
 interface Props { user: User; onLogout: () => void; }
-type Sheet = null | 'equipe' | 'monitor' | 'nova';
+type Sheet = null | 'equipe' | 'monitor' | 'nova' | 'relatorio' | 'editar';
 type Aba = 'inicio' | 'tasks';
-const ALL_STATUS = ['Back Log','Atuando','Em testes','Liberado para QA','Deploy','Concluído'] as const;
+const ALL_STATUS = ['BACK_LOG','ATUANDO','EM_TESTES','LIBERADO_PARA_QA','DEPLOY','CONCLUIDO'] as const;
 
 export function Manager({ user, onLogout }: Props) {
   const now = useNow();
@@ -26,11 +27,15 @@ export function Manager({ user, onLogout }: Props) {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [monitorId, setMonitorId] = useState<string>('');
 
-  // Minha atividade
+  const [editUser, setEditUser] = useState<User | null>(null);
+  const [editNome, setEditNome] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editCargo, setEditCargo] = useState('');
+  const [editErro, setEditErro] = useState('');
+
+  // Minha atividade — task self-assigned real, não estado local
   const [meuTitulo, setMeuTitulo] = useState('');
-  const [meuRodando, setMeuRodando] = useState(false);
-  const [meuSegundos, setMeuSegundos] = useState(0);
-  const [meuInicio, setMeuInicio] = useState<number | null>(null);
+  const [criandoMinha, setCriandoMinha] = useState(false);
 
   // Nova task form
   const [fTitulo, setFTitulo] = useState('');
@@ -39,14 +44,19 @@ export function Manager({ user, onLogout }: Props) {
   const [fProjeto, setFProjeto] = useState('');
   const [fHoras, setFHoras] = useState('4');
   const [fData, setFData] = useState('');
-  const [fSev, setFSev] = useState<Task['severidade']>('Média');
+  const [fSev, setFSev] = useState<Task['severidade']>('MEDIA');
   const [fUserId, setFUserId] = useState('');
-  const [fStatus, setFStatus] = useState<Task['status']>('Back Log');
+  const [fStatus, setFStatus] = useState<Task['status']>('BACK_LOG');
   const [criando, setCriando] = useState(false);
+
+  // Relatório
+  const [relEscopo, setRelEscopo] = useState<string>('equipe');
+  const [relFormato, setRelFormato] = useState<'pdf' | 'xlsx'>('pdf');
+  const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
 
   const load = useCallback(async () => {
     const [t, e] = await Promise.all([
-      api.get<Task[]>(`/tasks?gerenteId=${user.id}`),
+      api.get<Task[]>('/tasks'),
       api.get<User[]>(`/users/team/${user.id}`),
     ]);
     setTasks(t);
@@ -54,19 +64,30 @@ export function Manager({ user, onLogout }: Props) {
   }, [user.id]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => subscribeTaskEvents(load), [load]);
 
-  const meuTotal = meuSegundos + (meuRodando && meuInicio ? Math.floor((now - meuInicio) / 1000) : 0);
+  const minhaAtiva = tasks.find(t => t.userId === user.id && t.rodando);
+  const meuTotal = minhaAtiva ? calcTotalSeconds(minhaAtiva, now) : 0;
 
-  const toggleMeu = () => {
-    if (!meuRodando) {
-      setMeuRodando(true);
-      setMeuInicio(Date.now());
-    } else {
-      const elapsed = meuInicio ? Math.floor((Date.now() - meuInicio) / 1000) : 0;
-      setMeuSegundos(s => s + elapsed);
-      setMeuRodando(false);
-      setMeuInicio(null);
-    }
+  const handleMinhaTask = async () => {
+    if (!meuTitulo.trim()) return;
+    setCriandoMinha(true);
+    try {
+      const dataFinal = new Date(); dataFinal.setDate(dataFinal.getDate() + 7);
+      const t = await api.post<Task>('/tasks', {
+        titulo: meuTitulo, userId: user.id, status: 'ATUANDO',
+        severidade: 'BAIXA', horas: 1, dataFinal: dataFinal.toISOString().split('T')[0],
+      });
+      setMeuTitulo('');
+      await api.post(`/tasks/${t.id}/start`, {});
+      await load();
+    } finally { setCriandoMinha(false); }
+  };
+
+  const handlePausarMinha = async () => {
+    if (!minhaAtiva) return;
+    await api.post(`/tasks/${minhaAtiva.id}/stop`, {});
+    await load();
   };
 
   const toggleTask = (id: string) => setAbertos(a => ({ ...a, [id]: !a[id] }));
@@ -91,6 +112,20 @@ export function Manager({ user, onLogout }: Props) {
     await load();
   };
 
+  const handleUpload = async (taskId: string, file: File) => {
+    await uploadFile(`/anexos/tasks/${taskId}/anexos`, file);
+    await load();
+  };
+
+  const handleDownload = async (anexoId: string, nome: string) => {
+    await downloadFile(`/anexos/${anexoId}/download`, nome);
+  };
+
+  const handleRemoveAnexo = async (anexoId: string) => {
+    await api.delete(`/anexos/${anexoId}`);
+    await load();
+  };
+
   const handleCriarTask = async () => {
     if (!fTitulo.trim()) return;
     setCriando(true);
@@ -102,12 +137,38 @@ export function Manager({ user, onLogout }: Props) {
       });
       setSheet(null);
       setFTitulo(''); setFDesc(''); setFEmpresa(''); setFProjeto('');
-      setFHoras('4'); setFData(''); setFSev('Média'); setFUserId(''); setFStatus('Back Log');
+      setFHoras('4'); setFData(''); setFSev('MEDIA'); setFUserId(''); setFStatus('BACK_LOG');
       await load();
     } finally { setCriando(false); }
   };
 
-  const ativas = tasks.filter(t => t.status !== 'Back Log' && t.status !== 'Concluído');
+  const handleEditar = async () => {
+    if (!editUser) return;
+    if (!editNome.trim() || !editEmail.trim()) { setEditErro('Nome e e-mail são obrigatórios.'); return; }
+    setCriando(true); setEditErro('');
+    try {
+      await api.put(`/users/${editUser.id}`, { nome: editNome, email: editEmail, cargo: editCargo });
+      setSheet(null); setEditUser(null);
+      await load();
+    } catch (e: any) { setEditErro(e.message); }
+    setCriando(false);
+  };
+
+  const handleGerarRelatorio = async () => {
+    setGerandoRelatorio(true);
+    try {
+      if (relEscopo === 'equipe') {
+        await downloadFile(`/reports/team?format=${relFormato}`, `relatorio-equipe.${relFormato}`);
+      } else {
+        const membro = equipe.find(e => e.id === relEscopo);
+        const slug = (membro?.nome ?? relEscopo).toLowerCase().replace(/\s+/g, '-');
+        await downloadFile(`/reports/user/${relEscopo}?format=${relFormato}`, `relatorio-${slug}.${relFormato}`);
+      }
+      setSheet(null);
+    } finally { setGerandoRelatorio(false); }
+  };
+
+  const ativas = tasks.filter(t => t.status !== 'BACK_LOG' && t.status !== 'CONCLUIDO');
   const filtradas = filtro === 'Todas' ? tasks : tasks.filter(t => t.status === filtro);
   const monitorUser = equipe.find(e => e.id === monitorId);
   const monitorTasks = tasks.filter(t => t.userId === monitorId);
@@ -126,15 +187,30 @@ export function Manager({ user, onLogout }: Props) {
             <div className={styles.nome}>{user.nome}</div>
           </div>
         </div>
-        <button className={styles.equipeBtn} onClick={() => setSheet('equipe')}>
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-            <circle cx="8" cy="7" r="3" stroke="currentColor" strokeWidth="1.8"/>
-            <circle cx="14" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.6"/>
-            <path d="M2 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-            <path d="M14 11c2.2 0 4 1.8 4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-          </svg>
-          <span>Equipe</span>
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className={styles.equipeBtn} onClick={() => setSheet('relatorio')}>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+              <path d="M6 2.5h6l3 3V16a1 1 0 01-1 1H6a1 1 0 01-1-1V3.5a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
+              <path d="M7.5 9.5h5M7.5 12h5M7.5 7h2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            <span>Relatório</span>
+          </button>
+          <button className={styles.equipeBtn} onClick={() => setSheet('equipe')}>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+              <circle cx="8" cy="7" r="3" stroke="currentColor" strokeWidth="1.8"/>
+              <circle cx="14" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.6"/>
+              <path d="M2 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              <path d="M14 11c2.2 0 4 1.8 4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+            <span>Equipe</span>
+          </button>
+          <button className={styles.sairBtn} onClick={onLogout} title="Sair">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <polyline points="3 3 3 8 8 8" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Conteúdo scrollável */}
@@ -145,32 +221,35 @@ export function Manager({ user, onLogout }: Props) {
             <div className={styles.activityCard}>
               <div className={styles.activityTop}>
                 <span className={styles.activityLabel}>Minha atividade</span>
-                <span className={styles.activityStatus}>{meuRodando ? 'Cronômetro ativo' : 'Cronômetro parado'}</span>
+                <span className={styles.activityStatus}>{minhaAtiva ? 'Cronômetro ativo' : 'Cronômetro parado'}</span>
               </div>
-              <div className={styles.activityRow}>
-                <div className="fx-field" style={{ flex: 1 }}>
-                  <input
-                    placeholder="No que você está trabalhando?"
-                    value={meuTitulo}
-                    onChange={e => setMeuTitulo(e.target.value)}
-                  />
-                </div>
-                <button
-                  className={`${styles.playBtn} ${meuRodando ? styles.playing : ''}`}
-                  onClick={toggleMeu}
-                >
-                  {meuRodando ? (
+              {minhaAtiva ? (
+                <div className={styles.activityRow}>
+                  <span style={{ flex: 1, fontSize: 13, color: 'var(--fx-text-2)' }}>{minhaAtiva.titulo}</span>
+                  <button className={`${styles.playBtn} ${styles.playing}`} onClick={handlePausarMinha}>
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                       <rect x="3" y="3" width="3.5" height="10" rx="1" fill="var(--fx-accent)"/>
                       <rect x="9.5" y="3" width="3.5" height="10" rx="1" fill="var(--fx-accent)"/>
                     </svg>
-                  ) : (
+                  </button>
+                </div>
+              ) : (
+                <div className={styles.activityRow}>
+                  <div className="fx-field" style={{ flex: 1 }}>
+                    <input
+                      placeholder="No que você está trabalhando?"
+                      value={meuTitulo}
+                      onChange={e => setMeuTitulo(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleMinhaTask()}
+                    />
+                  </div>
+                  <button className={styles.playBtn} onClick={handleMinhaTask} disabled={criandoMinha}>
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                       <path d="M5 3l8 5-8 5V3z" fill="var(--fx-accent)"/>
                     </svg>
-                  )}
-                </button>
-              </div>
+                  </button>
+                </div>
+              )}
               <div className={styles.timerRow}>
                 <span className={`${styles.timer} fx-tabular`}>{formatSeconds(meuTotal)}</span>
                 <span className={styles.timerSub}>hoje · {formatHM(meuTotal)}</span>
@@ -185,7 +264,9 @@ export function Manager({ user, onLogout }: Props) {
             {ativas.length === 0
               ? <p className={styles.vazio}>Nenhuma task ativa no momento.</p>
               : ativas.map(t => <TaskCard key={t.id} task={t} now={now} aberta={!!abertos[t.id]} onToggle={toggleTask}
-                  onStart={handleStart} onStop={handleStop} onStatus={handleStatusChange} onDelete={handleDelete} isManager />)
+                  onStart={handleStart} onStop={handleStop} onStatus={handleStatusChange} onDelete={handleDelete}
+                  onUpload={handleUpload} onDownload={handleDownload} onRemoveAnexo={handleRemoveAnexo}
+                  isManager currentUserId={user.id} />)
             }
           </>
         )}
@@ -204,14 +285,16 @@ export function Manager({ user, onLogout }: Props) {
                   className={`fx-chip ${filtro === f ? 'active' : ''}`}
                   onClick={() => setFiltro(f)}
                 >
-                  {f}
+                  {f === 'Todas' ? 'Todas' : STATUS_LABELS[f as Task['status']]}
                 </button>
               ))}
             </div>
             {filtradas.length === 0
               ? <p className={styles.vazio}>Nenhuma task neste status.</p>
               : filtradas.map(t => <TaskCard key={t.id} task={t} now={now} aberta={!!abertos[t.id]} onToggle={toggleTask}
-                  onStart={handleStart} onStop={handleStop} onStatus={handleStatusChange} onDelete={handleDelete} isManager />)
+                  onStart={handleStart} onStop={handleStop} onStatus={handleStatusChange} onDelete={handleDelete}
+                  onUpload={handleUpload} onDownload={handleDownload} onRemoveAnexo={handleRemoveAnexo}
+                  isManager currentUserId={user.id} />)
             }
           </>
         )}
@@ -258,7 +341,13 @@ export function Manager({ user, onLogout }: Props) {
                       {taskAtiva ? `Atuando · ${taskAtiva.titulo}` : 'Sem task ativa'}
                     </div>
                   </div>
-                  <span className={`${styles.membroHoras} fx-tabular`}>{formatHM(totalDia)}</span>
+                  <span className={`${styles.membroHoras} fx-tabular`} style={{ marginRight: 8 }}>{formatHM(totalDia)}</span>
+                  <button className="fx-btn-sq" onClick={(event) => { event.stopPropagation(); setEditUser(e); setEditNome(e.nome); setEditEmail(e.email); setEditCargo(e.cargo || ''); setEditErro(''); setSheet('editar'); }} title="Editar dados">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z" />
+                    </svg>
+                  </button>
                 </div>
               );
             })}
@@ -363,9 +452,9 @@ export function Manager({ user, onLogout }: Props) {
             <div>
               <span className={styles.fieldLabel}>Severidade</span>
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                {(['Baixa','Média','Alta','Crítica'] as const).map(s => (
+                {(['BAIXA','MEDIA','ALTA','CRITICA'] as const).map(s => (
                   <button key={s} className={`fx-chip ${fSev === s ? 'active' : ''}`} onClick={() => setFSev(s)}>
-                    <span className={`fx-dot ${severidadeColor(s)}`} />{s}
+                    <span className={`fx-dot ${severidadeColor(s)}`} />{SEVERIDADE_LABELS[s]}
                   </button>
                 ))}
               </div>
@@ -393,7 +482,7 @@ export function Manager({ user, onLogout }: Props) {
               <span className={styles.fieldLabel}>Status inicial</span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
                 {ALL_STATUS.map(s => (
-                  <button key={s} className={`fx-chip ${fStatus === s ? 'active' : ''}`} onClick={() => setFStatus(s)}>{s}</button>
+                  <button key={s} className={`fx-chip ${fStatus === s ? 'active' : ''}`} onClick={() => setFStatus(s)}>{STATUS_LABELS[s]}</button>
                 ))}
               </div>
             </div>
@@ -404,6 +493,69 @@ export function Manager({ user, onLogout }: Props) {
               disabled={criando || !fTitulo.trim()}
             >
               {criando ? <div className="fx-spinner" /> : 'Criar e direcionar task'}
+            </button>
+          </div>
+        </BottomSheet>
+      )}
+
+      {/* Sheet: Relatório */}
+      {sheet === 'relatorio' && (
+        <BottomSheet onClose={() => setSheet(null)} title="Relatório">
+          <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <span className={styles.fieldLabel}>Escopo</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                <button className={`fx-chip ${relEscopo === 'equipe' ? 'active' : ''}`} onClick={() => setRelEscopo('equipe')}>
+                  Equipe inteira
+                </button>
+                {equipe.map(e => (
+                  <button key={e.id} className={`fx-chip ${relEscopo === e.id ? 'active' : ''}`} onClick={() => setRelEscopo(e.id)}>
+                    {e.nome}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <span className={styles.fieldLabel}>Formato</span>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button className={`fx-chip ${relFormato === 'pdf' ? 'active' : ''}`} onClick={() => setRelFormato('pdf')}>PDF</button>
+                <button className={`fx-chip ${relFormato === 'xlsx' ? 'active' : ''}`} onClick={() => setRelFormato('xlsx')}>XLSX</button>
+              </div>
+            </div>
+            <button
+              className="fx-btn-pill"
+              style={{ width: '100%', height: 50, fontSize: 14, marginTop: 4 }}
+              onClick={handleGerarRelatorio}
+              disabled={gerandoRelatorio}
+            >
+              {gerandoRelatorio ? <div className="fx-spinner" /> : 'Baixar relatório'}
+            </button>
+          </div>
+          </BottomSheet>
+      )}
+      {/* Sheet: Editar cadastro (Gerente editando USER) */}
+      {sheet === 'editar' && editUser && (
+        <BottomSheet onClose={() => { setSheet(null); setEditUser(null); }} title="Editar membro">
+          <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="fx-field">
+              <input placeholder="Nome completo" value={editNome} onChange={e => setEditNome(e.target.value)} />
+            </div>
+            <div className="fx-field">
+              <input type="email" placeholder="E-mail" value={editEmail} onChange={e => setEditEmail(e.target.value)} />
+            </div>
+            <div className="fx-field">
+              <input placeholder="Cargo" value={editCargo} onChange={e => setEditCargo(e.target.value)} />
+            </div>
+
+            {editErro && <p style={{ fontSize: 11.5, color: 'var(--fx-error)', textAlign: 'center' }}>{editErro}</p>}
+
+            <button
+              className="fx-btn-pill"
+              style={{ width: '100%', height: 50, fontSize: 14 }}
+              onClick={handleEditar}
+              disabled={criando}
+            >
+              {criando ? <div className="fx-spinner" /> : 'Salvar dados'}
             </button>
           </div>
         </BottomSheet>
@@ -420,20 +572,23 @@ interface TaskCardProps {
   onStop: (id: string) => void;
   onStatus: (id: string, s: Task['status']) => void;
   onDelete: (id: string) => void;
+  onUpload: (taskId: string, file: File) => void;
+  onDownload: (anexoId: string, nome: string) => void;
+  onRemoveAnexo: (anexoId: string) => void;
   isManager: boolean;
+  currentUserId: string;
 }
 
-function TaskCard({ task, now, aberta, onToggle, onStart, onStop, onStatus, onDelete, isManager }: TaskCardProps) {
+function TaskCard({ task, now, aberta, onToggle, onStart, onStop, onStatus, onDelete, onUpload, onDownload, onRemoveAnexo, isManager, currentUserId }: TaskCardProps) {
   const total = calcTotalSeconds(task, now);
   const dlClass = deadlineClass(task.dataFinal, task.status);
   const progress = Math.min(100, (total / (task.horas * 3600)) * 100);
   const restam = Math.max(0, task.horas * 3600 - total);
+  const souResponsavel = task.userId === currentUserId;
 
   const statusColors: Record<string, string> = { 'green': 'var(--fx-green)', 'yellow': 'var(--fx-yellow)', 'orange': 'var(--fx-orange)', 'red': 'var(--fx-red)' };
 
-  const statusList = isManager
-    ? ['Back Log','Atuando','Em testes','Liberado para QA','Deploy','Concluído'] as const
-    : ['Back Log','Atuando','Em testes','Liberado para QA','Deploy'] as const;
+  const statusList = ALL_STATUS;
 
   return (
     <div className={styles.taskCard} onClick={() => onToggle(task.id)}>
@@ -444,7 +599,7 @@ function TaskCard({ task, now, aberta, onToggle, onStart, onStop, onStatus, onDe
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fx-text-1)', lineHeight: 1.3 }}>{task.titulo}</div>
             {task.empresa && <div style={{ fontSize: 10, color: 'var(--fx-text-3)', marginTop: 2 }}>{task.empresa} · {task.projeto}</div>}
           </div>
-          <span className="fx-chip">{task.status}</span>
+          <span className="fx-chip">{STATUS_LABELS[task.status]}</span>
         </div>
 
         {task.user && (
@@ -472,27 +627,55 @@ function TaskCard({ task, now, aberta, onToggle, onStart, onStop, onStatus, onDe
             {task.descricao && <p style={{ fontSize: 12, color: 'var(--fx-text-2)', lineHeight: 1.6, marginBottom: 10 }}>{task.descricao}</p>}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
               <span className="fx-chip">{task.id}</span>
-              <span className={`fx-chip`} style={{ color: statusColors[severidadeColor(task.severidade)] }}><span className={`fx-dot ${severidadeColor(task.severidade)}`} />{task.severidade}</span>
+              <span className={`fx-chip`} style={{ color: statusColors[severidadeColor(task.severidade)] }}><span className={`fx-dot ${severidadeColor(task.severidade)}`} />{SEVERIDADE_LABELS[task.severidade]}</span>
               <span className="fx-chip">{task.horas}h estimadas</span>
-              {task.anexos.length > 0 && <span className="fx-chip">📎 {task.anexos.length}</span>}
+            </div>
+
+            {/* Anexos */}
+            <div style={{ marginBottom: 12 }}>
+              <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1.6, textTransform: 'uppercase', color: 'var(--fx-text-3)', display: 'block', marginBottom: 8 }}>
+                Anexos
+              </span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                {task.anexos.map(a => (
+                  <span key={a.id} className="fx-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ cursor: 'pointer' }} onClick={() => onDownload(a.id, a.nome)}>📎 {a.nome}</span>
+                    <span style={{ cursor: 'pointer', color: 'var(--fx-text-4)' }} onClick={() => onRemoveAnexo(a.id)}>✕</span>
+                  </span>
+                ))}
+              </div>
+              <label className="fx-btn-pill" style={{ display: 'block', textAlign: 'center', cursor: 'pointer' }}>
+                + Anexar arquivo
+                <input
+                  type="file"
+                  style={{ display: 'none' }}
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (file) onUpload(task.id, file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
             </div>
 
             {isManager && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                 {statusList.map(s => (
-                  <button key={s} className={`fx-chip ${task.status === s ? 'active' : ''}`} onClick={() => onStatus(task.id, s)}>{s}</button>
+                  <button key={s} className={`fx-chip ${task.status === s ? 'active' : ''}`} onClick={() => onStatus(task.id, s)}>{STATUS_LABELS[s]}</button>
                 ))}
               </div>
             )}
 
             <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                className="fx-btn-pill"
-                style={{ flex: 1 }}
-                onClick={() => task.rodando ? onStop(task.id) : onStart(task.id)}
-              >
-                {task.rodando ? '⏸ Pausar' : '▶ Iniciar'}
-              </button>
+              {task.rodando ? (
+                <button className="fx-btn-pill" style={{ flex: 1 }} onClick={() => onStop(task.id)}>⏸ Pausar</button>
+              ) : souResponsavel ? (
+                <button className="fx-btn-pill" style={{ flex: 1 }} onClick={() => onStart(task.id)}>▶ Iniciar</button>
+              ) : (
+                <span style={{ flex: 1, fontSize: 12, color: 'var(--fx-text-4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  Aguardando início pelo responsável
+                </span>
+              )}
               <button className="fx-btn-sq danger" style={{ width: 44, height: 44, borderRadius: 12 }} onClick={() => onDelete(task.id)}>
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                   <path d="M3 5h10M6 5V3h4v2M6 7v5M10 7v5M4 5l1 8h6l1-8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>

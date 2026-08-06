@@ -27,18 +27,18 @@
   --fx-red:         #bc4f3c;
 
   /* --- Sombras neumorfismo (relevo) --- */
-  --shadow-window:   18px 18px 40px rgba(163, 177, 198, 0.55), -14px -14px 34px #ffffff;
-  --shadow-card-lg:  6px 6px 15px rgba(163, 177, 198, 0.5), -6px -6px 15px #ffffff;
-  --shadow-card:     6px 6px 14px rgba(163, 177, 198, 0.45), -6px -6px 14px #ffffff;
-  --shadow-btn-sm:   4px 4px 10px rgba(163, 177, 198, 0.5), -4px -4px 10px #ffffff;
-  --shadow-chip:     3px 3px 8px rgba(163, 177, 198, 0.45), -3px -3px 8px #ffffff;
-  --shadow-sheet:    0 -12px 30px rgba(163, 177, 198, 0.4);
+  --shadow-window:   18px 18px 40px rgba(135, 149, 173, 0.75), -14px -14px 34px #ffffff;
+  --shadow-card-lg:  6px 6px 15px rgba(135, 149, 173, 0.7), -6px -6px 15px #ffffff;
+  --shadow-card:     6px 6px 14px rgba(135, 149, 173, 0.65), -6px -6px 14px #ffffff;
+  --shadow-btn-sm:   4px 4px 10px rgba(135, 149, 173, 0.7), -4px -4px 10px #ffffff;
+  --shadow-chip:     3px 3px 8px rgba(135, 149, 173, 0.65), -3px -3px 8px #ffffff;
+  --shadow-sheet:    0 -12px 30px rgba(135, 149, 173, 0.6);
 
   /* --- Sombras neumorfismo (inset / afundado) --- */
-  --shadow-inset-field:  inset 4px 4px 9px rgba(163, 177, 198, 0.5), inset -4px -4px 9px #ffffff;
-  --shadow-inset-chip:   inset 3px 3px 7px rgba(163, 177, 198, 0.55), inset -3px -3px 7px #ffffff;
-  --shadow-inset-btn:    inset 5px 5px 11px rgba(163, 177, 198, 0.6), inset -5px -5px 11px #ffffff;
-  --shadow-inset-login:  inset 5px 5px 11px rgba(163, 177, 198, 0.55), inset -5px -5px 11px #ffffff;
+  --shadow-inset-field:  inset 4px 4px 9px rgba(135, 149, 173, 0.7), inset -4px -4px 9px #ffffff;
+  --shadow-inset-chip:   inset 3px 3px 7px rgba(135, 149, 173, 0.75), inset -3px -3px 7px #ffffff;
+  --shadow-inset-btn:    inset 5px 5px 11px rgba(135, 149, 173, 0.8), inset -5px -5px 11px #ffffff;
+  --shadow-inset-login:  inset 5px 5px 11px rgba(135, 149, 173, 0.75), inset -5px -5px 11px #ffffff;
 
   /* --- Tipografia --- */
   --font: 'Montserrat', Helvetica, sans-serif;

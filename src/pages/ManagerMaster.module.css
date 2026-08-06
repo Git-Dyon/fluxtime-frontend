@@ -102,7 +102,7 @@
   padding: 0 26px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .gerenteCard {
@@ -110,13 +110,14 @@
   background: var(--fx-surface);
   box-shadow: var(--shadow-card);
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .gerenteHeader {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 16px 18px;
+  gap: 8px;
+  padding: 10px 14px;
   cursor: pointer;
 }
 
@@ -126,20 +127,20 @@
 }
 
 .gerenteNome {
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--fx-text-1);
   display: block;
 }
 
 .gerenteEmail {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--fx-text-3);
   display: block;
 }
 
 .equipe {
-  padding: 0 18px 16px;
+  padding: 0 14px 12px;
 }
 
 .equipeLabel {
@@ -155,8 +156,8 @@
 .membroRow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 0;
+  gap: 8px;
+  padding: 5px 0;
 }
 
 .membroInfo {
@@ -190,8 +191,9 @@
   box-shadow: var(--shadow-card);
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 8px;
+  padding: 10px 14px;
+  flex-shrink: 0;
 }
 
 .usuarioInfo {
