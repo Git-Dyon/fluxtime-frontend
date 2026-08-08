@@ -233,7 +233,7 @@ export function ManagerMaster({ user, onLogout }: Props) {
               <Avatar nome={g.nome} size={40} />
               <div className={styles.gerenteInfo}>
                 <span className={styles.gerenteNome}>{g.nome}</span>
-                <span className={styles.gerenteEmail}>{g.email.length > 28 ? g.email.slice(0,28)+'…' : g.email}</span>
+                <span className={styles.gerenteEmail}>{g.cargo || 'Gerente'}</span>
               </div>
               <div className={`fx-chip ${abertos[g.id] ? 'active' : ''}`}>{g.totalUsuarios || g.equipe?.length || 0} usuários</div>
               <button className="fx-btn-sq" onClick={(e) => { e.stopPropagation(); setEditUser(g); setEditNome(g.nome); setEditEmail(g.email); setEditCargo(g.cargo || ''); setEditErro(''); setEditResetSucesso(''); setSheet('editar'); }} title="Editar gerente">
@@ -404,7 +404,7 @@ export function ManagerMaster({ user, onLogout }: Props) {
                     <Avatar nome={u.nome} size={36} />
                     <div className={styles.membroInfo}>
                       <span className={styles.membroNome}>{u.nome}</span>
-                      <span className={styles.membroCargo}>{u.email}</span>
+                      <span className={styles.membroCargo}>{u.cargo || 'Sem cargo'}</span>
                     </div>
                     <div className={`fx-chip`}>+</div>
                   </div>

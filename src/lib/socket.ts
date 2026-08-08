@@ -1,6 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 
-const BASE = 'http://localhost:3741';
+const BASE = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3741';
 
 export const TASK_EVENTS = [
   'TASK_CREATED',
