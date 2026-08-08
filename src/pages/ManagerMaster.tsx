@@ -102,7 +102,7 @@ export function ManagerMaster({ user, onLogout }: Props) {
   const abrirBloqueio = (id: string, acao: 'excluir' | 'rebaixar', err: ApiError) => {
     setAlvoExclusao(id);
     setAcaoPendente(acao);
-    setBloqueios(err.data?.bloqueios || { equipe: [], tasksProprias: [] });
+    setBloqueios(err.data?.detalhes?.bloqueios || { equipe: [], tasksProprias: [] });
     setSheet('reatribuir');
   };
 
