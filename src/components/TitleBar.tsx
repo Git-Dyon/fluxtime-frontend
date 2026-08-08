@@ -1,4 +1,3 @@
-import React from 'react';
 import { electronAPI } from '../lib/electron';
 import styles from './TitleBar.module.css';
 

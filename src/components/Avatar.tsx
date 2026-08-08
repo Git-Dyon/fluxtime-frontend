@@ -1,4 +1,3 @@
-import React from 'react';
 import { initials } from '../lib/utils';
 import styles from './Avatar.module.css';
 

@@ -1,16 +1,17 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { TitleBar } from '../components/TitleBar';
 import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
-import { api, clearToken } from '../lib/api';
-import { Task, User } from '../lib/types';
+import { api, uploadFile, downloadFile } from '../lib/api';
+import { subscribeTaskEvents } from '../lib/socket';
+import type { Task, User } from '../lib/types';
 import { useNow } from '../hooks/useNow';
-import { calcTotalSeconds, deadlineClass, deadlineLabel, formatSeconds, formatHM, severidadeColor } from '../lib/utils';
+import { calcTotalSeconds, deadlineClass, deadlineLabel, formatSeconds, formatHM, severidadeColor, STATUS_LABELS, SEVERIDADE_LABELS } from '../lib/utils';
 import styles from './User.module.css';
 
 interface Props { user: User; onLogout: () => void; }
 type Aba = 'inicio' | 'tasks';
-const USER_STATUS = ['Back Log','Atuando','Em testes','Liberado para QA','Deploy'] as const;
+const USER_STATUS = ['BACK_LOG','ATUANDO','EM_TESTES','LIBERADO_PARA_QA','DEPLOY'] as const;
 
 export function User({ user, onLogout }: Props) {
   const now = useNow();
@@ -33,20 +34,21 @@ export function User({ user, onLogout }: Props) {
   const [fProjeto, setFProjeto] = useState('');
   const [fHoras, setFHoras] = useState('2');
   const [fData, setFData] = useState('');
-  const [fSev, setFSev] = useState<Task['severidade']>('Baixa');
+  const [fSev, setFSev] = useState<Task['severidade']>('BAIXA');
   const [criando, setCriando] = useState(false);
 
   const load = useCallback(async () => {
-    const t = await api.get<Task[]>(`/tasks?userId=${user.id}`);
+    const t = await api.get<Task[]>('/tasks');
     setTasks(t);
   }, [user.id]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => subscribeTaskEvents(load), [load]);
 
   const totalDia = tasks.reduce((s, t) => s + calcTotalSeconds(t, now), 0);
   const focoTask = tasks.find(t => t.rodando);
   const ordenadas = [...tasks].sort((a, b) => {
-    const sevOrder = { Crítica: 4, Alta: 3, Média: 2, Baixa: 1 };
+    const sevOrder = { CRITICA: 4, ALTA: 3, MEDIA: 2, BAIXA: 1 };
     const diff = sevOrder[b.severidade] - sevOrder[a.severidade];
     if (diff !== 0) return diff;
     return new Date(a.dataFinal).getTime() - new Date(b.dataFinal).getTime();
@@ -77,14 +79,28 @@ export function User({ user, onLogout }: Props) {
     await load();
   };
 
+  const handleUpload = async (taskId: string, file: File) => {
+    await uploadFile(`/anexos/tasks/${taskId}/anexos`, file);
+    await load();
+  };
+
+  const handleDownload = async (anexoId: string, nome: string) => {
+    await downloadFile(`/anexos/${anexoId}/download`, nome);
+  };
+
+  const handleRemoveAnexo = async (anexoId: string) => {
+    await api.delete(`/anexos/${anexoId}`);
+    await load();
+  };
+
   const handleQuickTask = async () => {
     if (!quickTitle.trim()) return;
     setCriando(true);
     try {
       const today = new Date(); today.setDate(today.getDate() + 7);
       const t = await api.post<Task>('/tasks', {
-        titulo: quickTitle, userId: user.id, status: 'Atuando',
-        severidade: 'Baixa', horas: 1,
+        titulo: quickTitle, userId: user.id, status: 'ATUANDO',
+        severidade: 'BAIXA', horas: 1,
         dataFinal: today.toISOString().split('T')[0],
       });
       setQuickTitle('');
@@ -101,7 +117,7 @@ export function User({ user, onLogout }: Props) {
       await api.post('/tasks', {
         titulo: fTitulo, descricao: fDesc, empresa: fEmpresa, projeto: fProjeto,
         horas: parseFloat(fHoras) || 1, dataFinal: fData || today.toISOString().split('T')[0],
-        severidade: fSev, status: 'Back Log', userId: user.id,
+        severidade: fSev, status: 'BACK_LOG', userId: user.id,
       });
       setSheet(false);
       setFTitulo(''); setFDesc(''); setFEmpresa(''); setFProjeto('');
@@ -124,9 +140,17 @@ export function User({ user, onLogout }: Props) {
             <div className={styles.nome}>{user.nome}</div>
           </div>
         </div>
-        <div className={styles.hojeArea}>
-          <span className={styles.hojeLabel}>Hoje</span>
-          <span className={`${styles.hojeTotal} fx-tabular`}>{formatHM(totalDia)}</span>
+        <div className={styles.headerRight}>
+          <div className={styles.hojeArea}>
+            <span className={styles.hojeLabel}>Hoje</span>
+            <span className={`${styles.hojeTotal} fx-tabular`}>{formatHM(totalDia)}</span>
+          </div>
+          <button className={styles.sairBtn} onClick={onLogout} title="Sair">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <polyline points="3 3 3 8 8 8" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -168,7 +192,7 @@ export function User({ user, onLogout }: Props) {
                     <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fx-text-1)', lineHeight: 1.3 }}>{focoTask.titulo}</div>
                     {focoTask.empresa && <div style={{ fontSize: 10, color: 'var(--fx-text-3)', marginTop: 2 }}>{focoTask.empresa} · {focoTask.projeto}</div>}
                   </div>
-                  <span className="fx-chip">{focoTask.status}</span>
+                  <span className="fx-chip">{STATUS_LABELS[focoTask.status]}</span>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -234,9 +258,9 @@ export function User({ user, onLogout }: Props) {
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                         <span className={`fx-chip`} style={{ color: statusColors[severidadeColor(t.severidade)] }}>
-                          <span className={`fx-dot ${severidadeColor(t.severidade)}`} />{t.severidade}
+                          <span className={`fx-dot ${severidadeColor(t.severidade)}`} />{SEVERIDADE_LABELS[t.severidade]}
                         </span>
-                        <span className="fx-chip">{t.status}</span>
+                        <span className="fx-chip">{STATUS_LABELS[t.status]}</span>
                       </div>
                     </div>
 
@@ -256,7 +280,33 @@ export function User({ user, onLogout }: Props) {
                           <span className="fx-chip">{t.id}</span>
                           <span className="fx-chip">{t.horas}h estimadas</span>
                           <span className="fx-chip">Entrega {new Date(t.dataFinal).toLocaleDateString('pt-BR')}</span>
-                          {t.anexos.length > 0 && <span className="fx-chip">📎 {t.anexos.length}</span>}
+                        </div>
+
+                        {/* Anexos */}
+                        <div style={{ marginBottom: 12 }}>
+                          <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1.6, textTransform: 'uppercase', color: 'var(--fx-text-3)', display: 'block', marginBottom: 8 }}>
+                            Anexos
+                          </span>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                            {t.anexos.map(a => (
+                              <span key={a.id} className="fx-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ cursor: 'pointer' }} onClick={() => handleDownload(a.id, a.nome)}>📎 {a.nome}</span>
+                                <span style={{ cursor: 'pointer', color: 'var(--fx-text-4)' }} onClick={() => handleRemoveAnexo(a.id)}>✕</span>
+                              </span>
+                            ))}
+                          </div>
+                          <label className="fx-btn-pill" style={{ display: 'block', textAlign: 'center', cursor: 'pointer' }}>
+                            + Anexar arquivo
+                            <input
+                              type="file"
+                              style={{ display: 'none' }}
+                              onChange={e => {
+                                const file = e.target.files?.[0];
+                                if (file) handleUpload(t.id, file);
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
                         </div>
 
                         <div className="fx-progress-track" style={{ marginBottom: 4 }}>
@@ -270,7 +320,7 @@ export function User({ user, onLogout }: Props) {
                         {/* Status (sem Concluído) */}
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                           {USER_STATUS.map(s => (
-                            <button key={s} className={`fx-chip ${t.status === s ? 'active' : ''}`} onClick={() => handleStatusChange(t.id, s)}>{s}</button>
+                            <button key={s} className={`fx-chip ${t.status === s ? 'active' : ''}`} onClick={() => handleStatusChange(t.id, s)}>{STATUS_LABELS[s]}</button>
                           ))}
                         </div>
                         <p style={{ fontSize: 10, color: 'var(--fx-text-4)', marginBottom: 10, fontStyle: 'italic' }}>
@@ -382,9 +432,9 @@ export function User({ user, onLogout }: Props) {
             <div>
               <span className={styles.fieldLabel}>Severidade</span>
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                {(['Baixa', 'Média', 'Alta', 'Crítica'] as const).map(s => (
+                {(['BAIXA', 'MEDIA', 'ALTA', 'CRITICA'] as const).map(s => (
                   <button key={s} className={`fx-chip ${fSev === s ? 'active' : ''}`} onClick={() => setFSev(s)}>
-                    <span className={`fx-dot ${severidadeColor(s)}`} />{s}
+                    <span className={`fx-dot ${severidadeColor(s)}`} />{SEVERIDADE_LABELS[s]}
                   </button>
                 ))}
               </div>

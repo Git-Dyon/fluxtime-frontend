@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 /** Tick a second-level counter; returns current epoch in ms updated every 1s */
 export function useNow(): number {
