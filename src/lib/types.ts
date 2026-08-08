@@ -1,6 +1,6 @@
-export type Severidade = 'Baixa' | 'Média' | 'Alta' | 'Crítica';
-export type Status = 'Back Log' | 'Atuando' | 'Em testes' | 'Liberado para QA' | 'Deploy' | 'Concluído';
-export type Perfil = 'manager_master' | 'manager' | 'user';
+export type Severidade = 'BAIXA' | 'MEDIA' | 'ALTA' | 'CRITICA';
+export type Status = 'BACK_LOG' | 'ATUANDO' | 'EM_TESTES' | 'LIBERADO_PARA_QA' | 'DEPLOY' | 'CONCLUIDO';
+export type Perfil = 'MANAGER_MASTER' | 'MANAGER' | 'USER';
 
 export interface User {
   id: string;
@@ -14,8 +14,9 @@ export interface User {
 }
 
 export interface Anexo {
-  id: number;
+  id: string;
   nome: string;
+  mimeType: string;
   tamanho: number;
 }
 

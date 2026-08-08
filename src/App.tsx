@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Login } from './pages/Login';
 import { ManagerMaster } from './pages/ManagerMaster';
 import { Manager } from './pages/Manager';
 import { User as UserPage } from './pages/User';
-import { User } from './lib/types';
+import type { User } from './lib/types';
 import { api, setToken } from './lib/api';
+import { connectSocket, disconnectSocket } from './lib/socket';
 import './styles/global.css';
 
 type AuthState = { user: User; token: string } | null;
@@ -23,7 +24,9 @@ export function App() {
         // Token seems ok, we need user data — store user in localStorage too
         const savedUser = localStorage.getItem('fx_user');
         if (savedUser) {
-          setAuth({ user: JSON.parse(savedUser), token: saved });
+          const user = JSON.parse(savedUser) as User;
+          if (user.perfil !== 'MANAGER_MASTER') connectSocket(saved);
+          setAuth({ user, token: saved });
         } else {
           localStorage.removeItem('fx_token');
         }
@@ -38,10 +41,12 @@ export function App() {
 
   const handleLogin = (user: User, token: string) => {
     localStorage.setItem('fx_user', JSON.stringify(user));
+    if (user.perfil !== 'MANAGER_MASTER') connectSocket(token);
     setAuth({ user, token });
   };
 
   const handleLogout = () => {
+    disconnectSocket();
     localStorage.removeItem('fx_token');
     localStorage.removeItem('fx_user');
     setAuth(null);
@@ -58,9 +63,9 @@ export function App() {
   const renderPage = () => {
     if (!auth) return <Login onLogin={handleLogin} />;
     switch (auth.user.perfil) {
-      case 'manager_master': return <ManagerMaster user={auth.user} onLogout={handleLogout} />;
-      case 'manager': return <Manager user={auth.user} onLogout={handleLogout} />;
-      case 'user': return <UserPage user={auth.user} onLogout={handleLogout} />;
+      case 'MANAGER_MASTER': return <ManagerMaster user={auth.user} onLogout={handleLogout} />;
+      case 'MANAGER': return <Manager user={auth.user} onLogout={handleLogout} />;
+      case 'USER': return <UserPage user={auth.user} onLogout={handleLogout} />;
       default: return <Login onLogin={handleLogin} />;
     }
   };
