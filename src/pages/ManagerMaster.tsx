@@ -35,6 +35,8 @@ export function ManagerMaster({ user, onLogout }: Props) {
   const [alvoExclusao, setAlvoExclusao] = useState<string>('');
   const [acaoPendente, setAcaoPendente] = useState<'excluir' | 'rebaixar'>('excluir');
   const [bloqueios, setBloqueios] = useState<Bloqueios>({ equipe: [], tasksProprias: [] });
+  // Senha provisória recém-gerada. Fica na tela até o master fechar — não é recuperável depois.
+  const [credencial, setCredencial] = useState<{ nome: string; senha: string } | null>(null);
 
   const [editUser, setEditUser] = useState<User | null>(null);
   const [editNome, setEditNome] = useState('');
@@ -77,7 +79,11 @@ export function ManagerMaster({ user, onLogout }: Props) {
     if (!novoNome.trim() || !novoEmail.trim()) { setErro('Nome e e-mail são obrigatórios.'); return; }
     setSalvando(true); setErro('');
     try {
-      await api.post('/users', { nome: novoNome, email: novoEmail, perfil: novoTipo, gerenteId: novoGerenteId || null });
+      const criado = await api.post<{ nome: string; senhaProvisoria: string }>('/users', {
+        nome: novoNome, email: novoEmail, perfil: novoTipo, gerenteId: novoGerenteId || null,
+      });
+      // A senha só existe nesta resposta: o banco guarda o hash e a auditoria a omite.
+      setCredencial({ nome: criado.nome, senha: criado.senhaProvisoria });
       setSheet(null); setNovoNome(''); setNovoEmail(''); setNovoGerenteId('');
       await load();
     } catch (e: any) { setErro(e.message); }
@@ -164,12 +170,13 @@ export function ManagerMaster({ user, onLogout }: Props) {
     if (!editUser) return;
     setEditErro(''); setEditResetSucesso('');
     try {
-      await api.post(`/users/${editUser.id}/reset-password`, {});
-      setEditResetSucesso('Senha resetada para timeflux@123 com sucesso!');
+      const r = await api.post<{ senhaProvisoria: string }>(`/users/${editUser.id}/reset-password`, {});
+      setCredencial({ nome: editUser.nome, senha: r.senhaProvisoria });
+      setEditResetSucesso('Senha redefinida. Anote a nova senha provisória exibida.');
     } catch (e: any) { setEditErro(e.message); }
   };
 
-  const handleLogout = () => { clearToken(); localStorage.removeItem('fx_token'); onLogout(); };
+  const handleLogout = () => { clearToken(); onLogout(); };
 
   const usuariosSemGerente = usuarios.filter(u => !u.gerenteId);
 
@@ -333,6 +340,50 @@ export function ManagerMaster({ user, onLogout }: Props) {
       {/* FAB */}
       <button className="fx-fab" style={{ right: 26, bottom: 26 }} onClick={() => { setSheet('novo'); setErro(''); }}>+</button>
 
+      {/* Senha provisória: aparece uma única vez, logo após criar o usuário ou
+          resetar a senha. Não há como recuperá-la depois — só gerar outra. */}
+      {credencial && (
+        <BottomSheet onClose={() => setCredencial(null)} title="Senha provisória">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 8 }}>
+            <span className={styles.sheetLabel}>{credencial.nome}</span>
+            <div
+              style={{
+                fontFamily: 'ui-monospace, Consolas, monospace',
+                fontSize: 21,
+                letterSpacing: '0.06em',
+                textAlign: 'center',
+                padding: '18px 12px',
+                borderRadius: 'var(--radius-card)',
+                boxShadow: 'var(--shadow-inset-field)',
+                color: 'var(--fx-text-input)',
+                userSelect: 'all',
+                wordBreak: 'break-all',
+              }}
+            >
+              {credencial.senha}
+            </div>
+            <p style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--fx-text-2)', margin: 0 }}>
+              Anote e entregue ao funcionário por um canal seguro. Ela não fica gravada em
+              lugar nenhum e será exigida a troca no primeiro acesso.
+            </p>
+            <button
+              className="fx-btn-pill"
+              style={{ width: '100%', height: 48, fontSize: 14 }}
+              onClick={() => { void navigator.clipboard?.writeText(credencial.senha); }}
+            >
+              Copiar senha
+            </button>
+            <button
+              className="fx-btn-pill"
+              style={{ width: '100%', height: 44, fontSize: 13 }}
+              onClick={() => setCredencial(null)}
+            >
+              Já anotei, fechar
+            </button>
+          </div>
+        </BottomSheet>
+      )}
+
       {/* Bottom sheet: Novo cadastro */}
       {sheet === 'novo' && (
         <BottomSheet onClose={() => setSheet(null)} title="Novo cadastro">
@@ -378,8 +429,8 @@ export function ManagerMaster({ user, onLogout }: Props) {
               {salvando ? <div className="fx-spinner" /> : `Cadastrar ${novoTipo === 'MANAGER' ? 'gerente' : 'usuário'}`}
             </button>
 
-             <p style={{ fontSize: 10.5, color: 'var(--fx-text-4)', textAlign: 'center' }}>
-              Senha inicial: <strong>timeflux@123</strong>
+            <p style={{ fontSize: 10.5, color: 'var(--fx-text-4)', textAlign: 'center' }}>
+              Uma senha provisória será sorteada e exibida uma única vez após o cadastro.
             </p>
           </div>
         </BottomSheet>

@@ -11,6 +11,8 @@ export interface User {
   gerenteId: string | null;
   gerenteNome?: string;
   totalUsuarios?: number;
+  /** Senha ainda é a provisória entregue pelo master — a API bloqueia tudo até a troca. */
+  precisaTrocarSenha?: boolean;
 }
 
 export interface Anexo {
@@ -43,4 +45,10 @@ export interface Task {
 export interface AuthResponse {
   token: string;
   user: User;
+}
+
+/** Resposta de criação de usuário e de reset: a senha provisória aparece uma única vez. */
+export interface SenhaProvisoriaResponse {
+  ok?: boolean;
+  senhaProvisoria: string;
 }
