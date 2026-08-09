@@ -2,36 +2,46 @@ import { useCallback, useEffect, useState } from 'react';
 import { TitleBar } from '../components/TitleBar';
 import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
-import { api, uploadFile, downloadFile } from '../lib/api';
+import { EspeciaisBar } from '../components/EspeciaisBar';
+import { TimeLogHistory } from '../components/TimeLogHistory';
+import { RequisicoesSheet } from '../components/RequisicoesSheet';
+import { api, ApiError, uploadFile, downloadFile } from '../lib/api';
 import { subscribeTaskEvents } from '../lib/socket';
-import type { Task, User } from '../lib/types';
+import type { Requisicao, Task, User } from '../lib/types';
 import { useNow } from '../hooks/useNow';
 import {
-  calcTotalSeconds, deadlineClass, deadlineLabel,
-  formatSeconds, formatHM, severidadeColor, STATUS_LABELS, SEVERIDADE_LABELS
+  algumRodando, calcAtribuicaoSeconds, calcMeusSegundos, calcTotalSeconds,
+  deadlineClass, deadlineLabel, formatSeconds, formatHM, minhaAtribuicao,
+  severidadeColor, STATUS_LABELS, SEVERIDADE_LABELS,
 } from '../lib/utils';
 import styles from './Manager.module.css';
 
 interface Props { user: User; onLogout: () => void; }
-type Sheet = null | 'equipe' | 'monitor' | 'nova' | 'relatorio' | 'editar';
+type Sheet = null | 'equipe' | 'monitor' | 'nova' | 'relatorio' | 'requisicoes' | 'especial' | 'corrigirDados';
 type Aba = 'inicio' | 'tasks';
 const ALL_STATUS = ['BACK_LOG','ATUANDO','EM_TESTES','LIBERADO_PARA_QA','DEPLOY','CONCLUIDO'] as const;
+const MAX_RESPONSAVEIS = 3;
+const MAX_ESPECIAIS = 3;
 
 export function Manager({ user, onLogout }: Props) {
   const now = useNow();
   const [aba, setAba] = useState<Aba>('inicio');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [equipe, setEquipe] = useState<User[]>([]);
+  const [requisicoes, setRequisicoes] = useState<Requisicao[]>([]);
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
   const [filtro, setFiltro] = useState<string>('Todas');
   const [sheet, setSheet] = useState<Sheet>(null);
   const [monitorId, setMonitorId] = useState<string>('');
+  const [erroGlobal, setErroGlobal] = useState('');
 
-  const [editUser, setEditUser] = useState<User | null>(null);
-  const [editNome, setEditNome] = useState('');
-  const [editEmail, setEditEmail] = useState('');
-  const [editCargo, setEditCargo] = useState('');
-  const [editErro, setEditErro] = useState('');
+  // Correção de dados via requisição (G2) — gerente não edita direto mais.
+  const [corrigirAlvo, setCorrigirAlvo] = useState<User | null>(null);
+  const [corNome, setCorNome] = useState('');
+  const [corEmail, setCorEmail] = useState('');
+  const [corCargo, setCorCargo] = useState('');
+  const [corJustificativa, setCorJustificativa] = useState('');
+  const [corErro, setCorErro] = useState('');
 
   // Minha atividade — task self-assigned real, não estado local
   const [meuTitulo, setMeuTitulo] = useState('');
@@ -45,9 +55,13 @@ export function Manager({ user, onLogout }: Props) {
   const [fHoras, setFHoras] = useState('4');
   const [fData, setFData] = useState('');
   const [fSev, setFSev] = useState<Task['severidade']>('MEDIA');
-  const [fUserId, setFUserId] = useState('');
+  const [fUserIds, setFUserIds] = useState<string[]>([]);
   const [fStatus, setFStatus] = useState<Task['status']>('BACK_LOG');
   const [criando, setCriando] = useState(false);
+  const [erroForm, setErroForm] = useState('');
+
+  // Task especial
+  const [especialTitulo, setEspecialTitulo] = useState('');
 
   // Relatório
   const [relEscopo, setRelEscopo] = useState<string>('equipe');
@@ -55,19 +69,28 @@ export function Manager({ user, onLogout }: Props) {
   const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
 
   const load = useCallback(async () => {
-    const [t, e] = await Promise.all([
+    const [t, e, r] = await Promise.all([
       api.get<Task[]>('/tasks'),
       api.get<User[]>(`/users/team/${user.id}`),
+      api.get<Requisicao[]>('/requisicoes'),
     ]);
     setTasks(t);
     setEquipe(e);
+    setRequisicoes(r);
   }, [user.id]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => subscribeTaskEvents(load), [load]);
 
-  const minhaAtiva = tasks.find(t => t.userId === user.id && t.rodando);
-  const meuTotal = minhaAtiva ? calcTotalSeconds(minhaAtiva, now) : 0;
+  const comuns = tasks.filter(t => t.tipo === 'COMUM');
+  const especiais = tasks.filter(t => t.tipo === 'ESPECIAL').sort((a, b) => (a.ordemFixa ?? 0) - (b.ordemFixa ?? 0));
+  const minhasEspeciais = especiais.filter(t => t.gerenteId === user.id);
+
+  const reqPendentes = requisicoes.filter(r => r.status === 'PENDENTE' && r.destinatarioId === user.id);
+
+  // "Minha atividade": task comum onde EU sou responsável e meu cronômetro roda.
+  const minhaAtiva = comuns.find(t => minhaAtribuicao(t, user.id)?.rodando);
+  const meuTotal = minhaAtiva ? calcMeusSegundos(minhaAtiva, user.id, now) : 0;
 
   const handleMinhaTask = async () => {
     if (!meuTitulo.trim()) return;
@@ -75,30 +98,31 @@ export function Manager({ user, onLogout }: Props) {
     try {
       const dataFinal = new Date(); dataFinal.setDate(dataFinal.getDate() + 7);
       const t = await api.post<Task>('/tasks', {
-        titulo: meuTitulo, userId: user.id, status: 'ATUANDO',
+        titulo: meuTitulo, userIds: [user.id], status: 'ATUANDO',
         severidade: 'BAIXA', horas: 1, dataFinal: dataFinal.toISOString().split('T')[0],
       });
       setMeuTitulo('');
-      await api.post(`/tasks/${t.id}/start`, {});
+      await api.post(`/tasks/${t.id}/start`);
       await load();
     } finally { setCriandoMinha(false); }
   };
 
   const handlePausarMinha = async () => {
     if (!minhaAtiva) return;
-    await api.post(`/tasks/${minhaAtiva.id}/stop`, {});
+    await api.post(`/tasks/${minhaAtiva.id}/stop`);
     await load();
   };
 
   const toggleTask = (id: string) => setAbertos(a => ({ ...a, [id]: !a[id] }));
 
   const handleStart = async (id: string) => {
-    await api.post(`/tasks/${id}/start`, {});
+    await api.post(`/tasks/${id}/start`);
     await load();
   };
 
-  const handleStop = async (id: string) => {
-    await api.post(`/tasks/${id}/stop`, {});
+  /** Sem userId = paro o meu próprio cronômetro; com userId = paro o de um membro. */
+  const handleStop = async (id: string, userId?: string) => {
+    await api.post(`/tasks/${id}/stop`, userId ? { userId } : undefined);
     await load();
   };
 
@@ -108,8 +132,13 @@ export function Manager({ user, onLogout }: Props) {
   };
 
   const handleDelete = async (id: string) => {
-    await api.delete(`/tasks/${id}`);
-    await load();
+    setErroGlobal('');
+    try {
+      await api.delete(`/tasks/${id}`);
+      await load();
+    } catch (e: any) {
+      setErroGlobal(e instanceof ApiError ? e.message : 'Não foi possível excluir a task.');
+    }
   };
 
   const handleUpload = async (taskId: string, file: File) => {
@@ -126,32 +155,95 @@ export function Manager({ user, onLogout }: Props) {
     await load();
   };
 
+  const toggleResponsavel = (id: string) => {
+    setErroForm('');
+    setFUserIds(atual => {
+      if (atual.includes(id)) return atual.filter(x => x !== id);
+      if (atual.length >= MAX_RESPONSAVEIS) {
+        setErroForm(`Uma task pode ter no máximo ${MAX_RESPONSAVEIS} responsáveis.`);
+        return atual;
+      }
+      return [...atual, id];
+    });
+  };
+
   const handleCriarTask = async () => {
     if (!fTitulo.trim()) return;
     setCriando(true);
+    setErroForm('');
     try {
       await api.post('/tasks', {
         titulo: fTitulo, descricao: fDesc, empresa: fEmpresa, projeto: fProjeto,
         horas: parseFloat(fHoras) || 1, dataFinal: fData,
-        severidade: fSev, status: fStatus, userId: fUserId || null,
+        severidade: fSev, status: fStatus,
+        // Sem ninguém selecionado, a task fica para o próprio gerente.
+        userIds: fUserIds.length > 0 ? fUserIds : [user.id],
       });
       setSheet(null);
       setFTitulo(''); setFDesc(''); setFEmpresa(''); setFProjeto('');
-      setFHoras('4'); setFData(''); setFSev('MEDIA'); setFUserId(''); setFStatus('BACK_LOG');
+      setFHoras('4'); setFData(''); setFSev('MEDIA'); setFUserIds([]); setFStatus('BACK_LOG');
       await load();
+    } catch (e: any) {
+      setErroForm(e instanceof ApiError ? e.message : 'Não foi possível criar a task.');
     } finally { setCriando(false); }
   };
 
-  const handleEditar = async () => {
-    if (!editUser) return;
-    if (!editNome.trim() || !editEmail.trim()) { setEditErro('Nome e e-mail são obrigatórios.'); return; }
-    setCriando(true); setEditErro('');
+  const handleCriarEspecial = async () => {
+    if (!especialTitulo.trim()) return;
+    setCriando(true);
+    setErroForm('');
     try {
-      await api.put(`/users/${editUser.id}`, { nome: editNome, email: editEmail, cargo: editCargo });
-      setSheet(null); setEditUser(null);
+      await api.post('/tasks/especiais', { titulo: especialTitulo });
+      setEspecialTitulo('');
+      setSheet(null);
       await load();
-    } catch (e: any) { setEditErro(e.message); }
-    setCriando(false);
+    } catch (e: any) {
+      setErroForm(e instanceof ApiError ? e.message : 'Não foi possível criar a task fixa.');
+    } finally { setCriando(false); }
+  };
+
+  const handleRenomearEspecial = async (taskId: string, titulo: string) => {
+    await api.put(`/tasks/${taskId}`, { titulo });
+    await load();
+  };
+
+  /**
+   * Correção de dados agora é requisição ao master (G2) — o gerente não edita
+   * conta de ninguém diretamente, nem a própria.
+   */
+  const handlePedirCorrecao = async () => {
+    if (!corrigirAlvo) return;
+    const payload: Record<string, string> = {};
+    if (corNome.trim() && corNome !== corrigirAlvo.nome) payload.nome = corNome.trim();
+    if (corEmail.trim() && corEmail !== corrigirAlvo.email) payload.email = corEmail.trim();
+    if (corCargo.trim() !== (corrigirAlvo.cargo ?? '')) payload.cargo = corCargo.trim();
+
+    if (Object.keys(payload).length === 0) { setCorErro('Altere ao menos um campo.'); return; }
+
+    setCriando(true);
+    setCorErro('');
+    try {
+      await api.post('/requisicoes', {
+        tipo: 'ALTERAR_DADOS',
+        alvoId: corrigirAlvo.id,
+        payload,
+        justificativa: corJustificativa.trim(),
+      });
+      setSheet(null); setCorrigirAlvo(null); setCorJustificativa('');
+      await load();
+    } catch (e: any) {
+      setCorErro(e instanceof ApiError ? e.message : 'Não foi possível abrir a requisição.');
+    } finally { setCriando(false); }
+  };
+
+  const abrirCorrecao = (alvo: User) => {
+    setCorrigirAlvo(alvo);
+    setCorNome(alvo.nome);
+    setCorEmail(alvo.email);
+    setCorCargo(alvo.cargo ?? '');
+    setCorJustificativa('');
+    setCorErro('');
+    setSheet('corrigirDados');
   };
 
   const handleGerarRelatorio = async () => {
@@ -168,11 +260,11 @@ export function Manager({ user, onLogout }: Props) {
     } finally { setGerandoRelatorio(false); }
   };
 
-  const ativas = tasks.filter(t => t.status !== 'BACK_LOG' && t.status !== 'CONCLUIDO');
-  const filtradas = filtro === 'Todas' ? tasks : tasks.filter(t => t.status === filtro);
+  const ativas = comuns.filter(t => t.status !== 'BACK_LOG' && t.status !== 'CONCLUIDO');
+  const filtradas = filtro === 'Todas' ? comuns : comuns.filter(t => t.status === filtro);
   const monitorUser = equipe.find(e => e.id === monitorId);
-  const monitorTasks = tasks.filter(t => t.userId === monitorId);
-  const monitorAtiva = monitorTasks.find(t => t.rodando);
+  const monitorTasks = comuns.filter(t => t.atribuicoes.some(a => a.userId === monitorId));
+  const monitorAtiva = monitorTasks.find(t => t.atribuicoes.find(a => a.userId === monitorId)?.rodando);
 
   return (
     <>
@@ -188,6 +280,17 @@ export function Manager({ user, onLogout }: Props) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            className={`${styles.equipeBtn} ${styles.btnComBadge}`}
+            onClick={() => setSheet('requisicoes')}
+            title="Requisições"
+          >
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+              <path d="M10 2.5v7.5l4.5 2.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.7" />
+            </svg>
+            {reqPendentes.length > 0 && <span className={styles.badge}>{reqPendentes.length}</span>}
+          </button>
           <button className={styles.equipeBtn} onClick={() => setSheet('relatorio')}>
             <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
               <path d="M6 2.5h6l3 3V16a1 1 0 01-1 1H6a1 1 0 01-1-1V3.5a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
@@ -215,6 +318,10 @@ export function Manager({ user, onLogout }: Props) {
 
       {/* Conteúdo scrollável */}
       <div className={styles.scrollArea}>
+        {erroGlobal && (
+          <p style={{ fontSize: 11.5, color: 'var(--fx-error)', textAlign: 'center' }}>{erroGlobal}</p>
+        )}
+
         {aba === 'inicio' && (
           <>
             {/* Minha atividade */}
@@ -259,14 +366,14 @@ export function Manager({ user, onLogout }: Props) {
             {/* Tasks em andamento */}
             <div className={styles.sectionHeader}>
               <span className={styles.sectionTitle}>Tasks em andamento</span>
-              <span className={styles.sectionCount}>{ativas.length} de {tasks.length}</span>
+              <span className={styles.sectionCount}>{ativas.length} de {comuns.length}</span>
             </div>
             {ativas.length === 0
               ? <p className={styles.vazio}>Nenhuma task ativa no momento.</p>
               : ativas.map(t => <TaskCard key={t.id} task={t} now={now} aberta={!!abertos[t.id]} onToggle={toggleTask}
                   onStart={handleStart} onStop={handleStop} onStatus={handleStatusChange} onDelete={handleDelete}
                   onUpload={handleUpload} onDownload={handleDownload} onRemoveAnexo={handleRemoveAnexo}
-                  isManager currentUserId={user.id} />)
+                  onRecarregar={load} currentUserId={user.id} />)
             }
           </>
         )}
@@ -275,7 +382,7 @@ export function Manager({ user, onLogout }: Props) {
           <>
             <div className={styles.sectionHeader} style={{ marginTop: 0, paddingTop: 16 }}>
               <span className={styles.sectionTitle}>Todas as tasks</span>
-              <span className={styles.sectionCount}>{tasks.length} tasks</span>
+              <span className={styles.sectionCount}>{comuns.length} tasks</span>
             </div>
             {/* Filtros */}
             <div className={styles.filtros}>
@@ -294,13 +401,23 @@ export function Manager({ user, onLogout }: Props) {
               : filtradas.map(t => <TaskCard key={t.id} task={t} now={now} aberta={!!abertos[t.id]} onToggle={toggleTask}
                   onStart={handleStart} onStop={handleStop} onStatus={handleStatusChange} onDelete={handleDelete}
                   onUpload={handleUpload} onDownload={handleDownload} onRemoveAnexo={handleRemoveAnexo}
-                  isManager currentUserId={user.id} />)
+                  onRecarregar={load} currentUserId={user.id} />)
             }
           </>
         )}
 
-        <div style={{ height: 90 }} />
+        <div style={{ height: especiais.length > 0 ? 130 : 90 }} />
       </div>
+
+      {/* Tasks fixas da equipe (G4) */}
+      <EspeciaisBar
+        especiais={especiais}
+        userId={user.id}
+        now={now}
+        onStart={handleStart}
+        onStop={(id) => handleStop(id)}
+        onRenomear={handleRenomearEspecial}
+      />
 
       {/* Navbar */}
       <div className={styles.navbar}>
@@ -322,16 +439,27 @@ export function Manager({ user, onLogout }: Props) {
 
       {/* FAB nova task (só na aba tasks) */}
       {aba === 'tasks' && (
-        <button className="fx-fab" style={{ right: 26, bottom: 104 }} onClick={() => setSheet('nova')}>+</button>
+        <button className="fx-fab" style={{ right: 26, bottom: 104 }} onClick={() => { setSheet('nova'); setErroForm(''); }}>+</button>
       )}
 
       {/* Sheet: Equipe */}
       {sheet === 'equipe' && (
         <BottomSheet onClose={() => setSheet(null)} title="Monitorar equipe">
           <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <button
+              className="fx-btn-pill"
+              style={{ width: '100%', height: 44, fontSize: 13 }}
+              onClick={() => { setSheet('especial'); setErroForm(''); }}
+            >
+              + Task fixa da equipe ({minhasEspeciais.length}/{MAX_ESPECIAIS})
+            </button>
+
             {equipe.map(e => {
-              const taskAtiva = tasks.find(t => t.userId === e.id && t.rodando);
-              const totalDia = tasks.filter(t => t.userId === e.id).reduce((s, t) => s + calcTotalSeconds(t, now), 0);
+              const taskAtiva = comuns.find(t => t.atribuicoes.find(a => a.userId === e.id)?.rodando);
+              const totalDia = comuns.reduce((s, t) => {
+                const a = t.atribuicoes.find(x => x.userId === e.id);
+                return s + (a ? calcAtribuicaoSeconds(a, now) : 0);
+              }, 0);
               return (
                 <div key={e.id} className={styles.equipeRow} onClick={() => { setMonitorId(e.id); setSheet('monitor'); }}>
                   <Avatar nome={e.nome} size={40} />
@@ -342,7 +470,11 @@ export function Manager({ user, onLogout }: Props) {
                     </div>
                   </div>
                   <span className={`${styles.membroHoras} fx-tabular`} style={{ marginRight: 8 }}>{formatHM(totalDia)}</span>
-                  <button className="fx-btn-sq" onClick={(event) => { event.stopPropagation(); setEditUser(e); setEditNome(e.nome); setEditEmail(e.email); setEditCargo(e.cargo || ''); setEditErro(''); setSheet('editar'); }} title="Editar dados">
+                  <button
+                    className="fx-btn-sq"
+                    onClick={(event) => { event.stopPropagation(); abrirCorrecao(e); }}
+                    title="Pedir correção de dados"
+                  >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                       <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z" />
@@ -352,6 +484,14 @@ export function Manager({ user, onLogout }: Props) {
               );
             })}
             {equipe.length === 0 && <p className={styles.vazio}>Nenhum usuário na equipe.</p>}
+
+            <button
+              className="fx-btn-pill"
+              style={{ width: '100%', height: 40, fontSize: 12.5, marginTop: 6 }}
+              onClick={() => abrirCorrecao(user)}
+            >
+              Pedir correção dos meus dados
+            </button>
           </div>
         </BottomSheet>
       )}
@@ -359,7 +499,7 @@ export function Manager({ user, onLogout }: Props) {
       {/* Sheet: Monitor individual */}
       {sheet === 'monitor' && monitorUser && (
         <div className="fx-overlay" onClick={() => setSheet('equipe')}>
-          <div style={{ width: '100%', height: '100%', background: 'rgba(231,234,239,0.86)', backdropFilter: 'blur(4px)', display: 'flex', flexDirection: 'column', padding: 26 }} onClick={e => e.stopPropagation()}>
+          <div style={{ width: '100%', height: '100%', background: 'rgba(231,234,239,0.86)', backdropFilter: 'blur(4px)', display: 'flex', flexDirection: 'column', padding: 26, overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             <button className={styles.backBtn} onClick={() => setSheet('equipe')}>← Voltar</button>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginBottom: 24 }}>
               <Avatar nome={monitorUser.nome} size={46} />
@@ -370,7 +510,16 @@ export function Manager({ user, onLogout }: Props) {
               <div className={styles.monitorCard}>
                 <span className={styles.equipeLabel}>Atuando agora</span>
                 <div className={styles.monitorTitulo}>{monitorAtiva.titulo}</div>
-                <div className={`${styles.monitorTimer} fx-tabular`}>{formatSeconds(calcTotalSeconds(monitorAtiva, now))}</div>
+                <div className={`${styles.monitorTimer} fx-tabular`}>
+                  {formatSeconds(calcAtribuicaoSeconds(monitorAtiva.atribuicoes.find(a => a.userId === monitorId)!, now))}
+                </div>
+                <button
+                  className="fx-btn-pill"
+                  style={{ width: '100%', marginTop: 12, height: 40, fontSize: 12.5 }}
+                  onClick={() => handleStop(monitorAtiva.id, monitorId)}
+                >
+                  Pausar cronômetro
+                </button>
               </div>
             ) : (
               <div className={styles.monitorCard} style={{ textAlign: 'center' }}>
@@ -380,34 +529,120 @@ export function Manager({ user, onLogout }: Props) {
             <div style={{ marginTop: 20 }}>
               <span className={styles.equipeLabel}>Tasks vinculadas</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-                {monitorTasks.map(t => (
-                  <div key={t.id} className={styles.monitorTask}>
-                    <div className={`fx-dot ${deadlineClass(t.dataFinal, t.status)}`} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fx-text-1)' }}>{t.titulo}</div>
-                      <div style={{ fontSize: 10.5, color: 'var(--fx-text-3)' }}>{t.status} · {deadlineLabel(t.dataFinal)}</div>
+                {monitorTasks.map(t => {
+                  const a = t.atribuicoes.find(x => x.userId === monitorId)!;
+                  return (
+                    <div key={t.id} className={styles.monitorTask}>
+                      <div className={`fx-dot ${deadlineClass(t.dataFinal, t.status)}`} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fx-text-1)' }}>{t.titulo}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--fx-text-3)' }}>{STATUS_LABELS[t.status]} · {deadlineLabel(t.dataFinal)}</div>
+                      </div>
+                      <span className={`fx-tabular`} style={{ fontSize: 12, color: a.rodando ? 'var(--fx-accent)' : 'var(--fx-text-2)' }}>
+                        {formatSeconds(calcAtribuicaoSeconds(a, now))}
+                      </span>
                     </div>
-                    <span className={`fx-tabular`} style={{ fontSize: 12, color: t.rodando ? 'var(--fx-accent)' : 'var(--fx-text-2)' }}>
-                      {formatSeconds(calcTotalSeconds(t, now))}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* Sheet: Requisições */}
+      {sheet === 'requisicoes' && (
+        <RequisicoesSheet
+          requisicoes={requisicoes}
+          souMaster={false}
+          meuId={user.id}
+          onClose={() => setSheet(null)}
+          onResolvida={load}
+        />
+      )}
+
+      {/* Sheet: Task fixa da equipe (G4) */}
+      {sheet === 'especial' && (
+        <BottomSheet onClose={() => setSheet(null)} title="Task fixa da equipe">
+          <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <p style={{ fontSize: 12, color: 'var(--fx-text-2)', lineHeight: 1.6 }}>
+              Fica fixa no rodapé do seu painel e no de toda a equipe, com play e pause próprios.
+              Roda em paralelo com uma task comum — mas só uma fixa por vez.
+            </p>
+            <div>
+              <span className={styles.fieldLabel}>Nome</span>
+              <div className="fx-field" style={{ marginTop: 6 }}>
+                <input
+                  placeholder="Daily, Reunião, Eventos…"
+                  value={especialTitulo}
+                  onChange={e => setEspecialTitulo(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleCriarEspecial()}
+                />
+              </div>
+            </div>
+            {minhasEspeciais.length > 0 && (
+              <div>
+                <span className={styles.fieldLabel}>Já criadas</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  {minhasEspeciais.map(t => <span key={t.id} className="fx-chip">{t.titulo}</span>)}
+                </div>
+              </div>
+            )}
+            {erroForm && <p style={{ fontSize: 11.5, color: 'var(--fx-error)', textAlign: 'center' }}>{erroForm}</p>}
+            <button
+              className="fx-btn-pill"
+              style={{ width: '100%', height: 50, fontSize: 14 }}
+              onClick={handleCriarEspecial}
+              disabled={criando || !especialTitulo.trim() || minhasEspeciais.length >= MAX_ESPECIAIS}
+            >
+              {criando ? <div className="fx-spinner" /> : 'Criar task fixa'}
+            </button>
+          </div>
+        </BottomSheet>
+      )}
+
+      {/* Sheet: Correção de dados via requisição (G2) */}
+      {sheet === 'corrigirDados' && corrigirAlvo && (
+        <BottomSheet onClose={() => { setSheet(null); setCorrigirAlvo(null); }} title="Pedir correção de dados">
+          <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <p style={{ fontSize: 12, color: 'var(--fx-text-2)', lineHeight: 1.6 }}>
+              Alterações de cadastro passam pelo administrador. Sua solicitação para{' '}
+              <strong>{corrigirAlvo.id === user.id ? 'os seus dados' : corrigirAlvo.nome}</strong> entra na fila dele.
+            </p>
+            <div className="fx-field">
+              <input placeholder="Nome completo" value={corNome} onChange={e => setCorNome(e.target.value)} />
+            </div>
+            <div className="fx-field">
+              <input type="email" placeholder="E-mail" value={corEmail} onChange={e => setCorEmail(e.target.value)} />
+            </div>
+            <div className="fx-field">
+              <input placeholder="Cargo" value={corCargo} onChange={e => setCorCargo(e.target.value)} />
+            </div>
+            <div className="fx-field" style={{ height: 'auto', padding: '10px 18px' }}>
+              <textarea
+                placeholder="Motivo da correção (opcional)"
+                value={corJustificativa}
+                onChange={e => setCorJustificativa(e.target.value)}
+                rows={2}
+              />
+            </div>
+            {corErro && <p style={{ fontSize: 11.5, color: 'var(--fx-error)', textAlign: 'center' }}>{corErro}</p>}
+            <button
+              className="fx-btn-pill"
+              style={{ width: '100%', height: 50, fontSize: 14 }}
+              onClick={handlePedirCorrecao}
+              disabled={criando}
+            >
+              {criando ? <div className="fx-spinner" /> : 'Enviar solicitação'}
+            </button>
+          </div>
+        </BottomSheet>
+      )}
+
       {/* Sheet: Nova task */}
       {sheet === 'nova' && (
         <BottomSheet onClose={() => setSheet(null)} title="Nova task">
           <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div>
-              <span className={styles.fieldLabel}>ID</span>
-              <div className="fx-field" style={{ opacity: 0.6, marginTop: 6 }}>
-                <input value="FX-AUTO" readOnly />
-              </div>
-            </div>
             <div>
               <span className={styles.fieldLabel}>Título *</span>
               <div className="fx-field" style={{ marginTop: 6 }}>
@@ -460,23 +695,33 @@ export function Manager({ user, onLogout }: Props) {
               </div>
             </div>
             <div>
-              <span className={styles.fieldLabel}>Vincular usuário</span>
+              <span className={styles.fieldLabel}>
+                Responsáveis — até {MAX_RESPONSAVEIS} ({fUserIds.length} selecionado{fUserIds.length === 1 ? '' : 's'})
+              </span>
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                {equipe.map(e => (
+                {[user, ...equipe].map(e => (
                   <div
                     key={e.id}
                     style={{ textAlign: 'center', cursor: 'pointer' }}
-                    onClick={() => setFUserId(fUserId === e.id ? '' : e.id)}
+                    onClick={() => toggleResponsavel(e.id)}
                   >
-                    <Avatar nome={e.nome} size={46} inset={fUserId === e.id} />
-                    {fUserId === e.id && (
-                      <div style={{ fontSize: 9, color: 'var(--fx-accent)', marginTop: 3, fontWeight: 600 }}>
-                        {e.nome.split(' ')[0]}
-                      </div>
-                    )}
+                    <Avatar nome={e.nome} size={46} inset={fUserIds.includes(e.id)} />
+                    <div style={{
+                      fontSize: 9,
+                      marginTop: 3,
+                      fontWeight: 600,
+                      color: fUserIds.includes(e.id) ? 'var(--fx-accent)' : 'var(--fx-text-4)',
+                    }}>
+                      {e.id === user.id ? 'Eu' : e.nome.split(' ')[0]}
+                    </div>
                   </div>
                 ))}
               </div>
+              {fUserIds.length === 0 && (
+                <p style={{ fontSize: 10.5, color: 'var(--fx-text-4)', marginTop: 6 }}>
+                  Sem seleção, a task fica para você.
+                </p>
+              )}
             </div>
             <div>
               <span className={styles.fieldLabel}>Status inicial</span>
@@ -486,6 +731,7 @@ export function Manager({ user, onLogout }: Props) {
                 ))}
               </div>
             </div>
+            {erroForm && <p style={{ fontSize: 11.5, color: 'var(--fx-error)', textAlign: 'center' }}>{erroForm}</p>}
             <button
               className="fx-btn-pill"
               style={{ width: '100%', height: 50, fontSize: 14, marginTop: 4 }}
@@ -531,33 +777,6 @@ export function Manager({ user, onLogout }: Props) {
               {gerandoRelatorio ? <div className="fx-spinner" /> : 'Baixar relatório'}
             </button>
           </div>
-          </BottomSheet>
-      )}
-      {/* Sheet: Editar cadastro (Gerente editando USER) */}
-      {sheet === 'editar' && editUser && (
-        <BottomSheet onClose={() => { setSheet(null); setEditUser(null); }} title="Editar membro">
-          <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div className="fx-field">
-              <input placeholder="Nome completo" value={editNome} onChange={e => setEditNome(e.target.value)} />
-            </div>
-            <div className="fx-field">
-              <input type="email" placeholder="E-mail" value={editEmail} onChange={e => setEditEmail(e.target.value)} />
-            </div>
-            <div className="fx-field">
-              <input placeholder="Cargo" value={editCargo} onChange={e => setEditCargo(e.target.value)} />
-            </div>
-
-            {editErro && <p style={{ fontSize: 11.5, color: 'var(--fx-error)', textAlign: 'center' }}>{editErro}</p>}
-
-            <button
-              className="fx-btn-pill"
-              style={{ width: '100%', height: 50, fontSize: 14 }}
-              onClick={handleEditar}
-              disabled={criando}
-            >
-              {criando ? <div className="fx-spinner" /> : 'Salvar dados'}
-            </button>
-          </div>
         </BottomSheet>
       )}
     </>
@@ -569,26 +788,28 @@ interface TaskCardProps {
   task: Task; now: number; aberta: boolean;
   onToggle: (id: string) => void;
   onStart: (id: string) => void;
-  onStop: (id: string) => void;
+  onStop: (id: string, userId?: string) => void;
   onStatus: (id: string, s: Task['status']) => void;
   onDelete: (id: string) => void;
   onUpload: (taskId: string, file: File) => void;
   onDownload: (anexoId: string, nome: string) => void;
   onRemoveAnexo: (anexoId: string) => void;
-  isManager: boolean;
+  onRecarregar: () => void;
   currentUserId: string;
 }
 
-function TaskCard({ task, now, aberta, onToggle, onStart, onStop, onStatus, onDelete, onUpload, onDownload, onRemoveAnexo, isManager, currentUserId }: TaskCardProps) {
+function TaskCard({
+  task, now, aberta, onToggle, onStart, onStop, onStatus, onDelete,
+  onUpload, onDownload, onRemoveAnexo, onRecarregar, currentUserId,
+}: TaskCardProps) {
+  // O gerente enxerga o total investido por todos; o botão de play só age no dele.
   const total = calcTotalSeconds(task, now);
+  const minha = minhaAtribuicao(task, currentUserId);
   const dlClass = deadlineClass(task.dataFinal, task.status);
   const progress = Math.min(100, (total / (task.horas * 3600)) * 100);
   const restam = Math.max(0, task.horas * 3600 - total);
-  const souResponsavel = task.userId === currentUserId;
 
   const statusColors: Record<string, string> = { 'green': 'var(--fx-green)', 'yellow': 'var(--fx-yellow)', 'orange': 'var(--fx-orange)', 'red': 'var(--fx-red)' };
-
-  const statusList = ALL_STATUS;
 
   return (
     <div className={styles.taskCard} onClick={() => onToggle(task.id)}>
@@ -602,15 +823,31 @@ function TaskCard({ task, now, aberta, onToggle, onStart, onStop, onStatus, onDe
           <span className="fx-chip">{STATUS_LABELS[task.status]}</span>
         </div>
 
-        {task.user && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0' }}>
-            <Avatar nome={task.user.nome} size={28} inset />
-            <span style={{ fontSize: 13, color: 'var(--fx-text-2)', flex: 1 }}>{task.user.nome}</span>
-            <span className={`fx-tabular`} style={{ fontSize: 13, fontWeight: 700, color: task.rodando ? 'var(--fx-accent)' : 'var(--fx-text-2)' }}>
-              {formatSeconds(total)}
+        {/* Um responsável: linha compacta. Vários: uma linha por pessoa, com o
+            cronômetro individual — é o que a delegação múltipla (G3) precisa mostrar. */}
+        {task.atribuicoes.map(a => (
+          <div key={a.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0' }}>
+            <Avatar nome={a.nome} size={26} inset />
+            <span style={{ fontSize: 12.5, color: 'var(--fx-text-2)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {a.userId === currentUserId ? 'Eu' : a.nome}
             </span>
+            <span className="fx-tabular" style={{ fontSize: 12.5, fontWeight: 700, color: a.rodando ? 'var(--fx-accent)' : 'var(--fx-text-2)' }}>
+              {formatSeconds(calcAtribuicaoSeconds(a, now))}
+            </span>
+            {aberta && a.rodando && a.userId !== currentUserId && (
+              <button
+                className="fx-btn-sq"
+                title={`Pausar cronômetro de ${a.nome.split(' ')[0]}`}
+                onClick={(e) => { e.stopPropagation(); onStop(task.id, a.userId); }}
+              >
+                <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                  <rect x="3" y="3" width="3.5" height="10" rx="1" fill="var(--fx-accent)" />
+                  <rect x="9.5" y="3" width="3.5" height="10" rx="1" fill="var(--fx-accent)" />
+                </svg>
+              </button>
+            )}
           </div>
-        )}
+        ))}
 
         <div className="fx-progress-track" style={{ margin: '8px 0 4px' }}>
           <div className="fx-progress-fill" style={{ width: `${progress}%`, background: statusColors[dlClass] }} />
@@ -626,7 +863,7 @@ function TaskCard({ task, now, aberta, onToggle, onStart, onStop, onStatus, onDe
             <hr className="fx-divider" style={{ marginBottom: 10 }} />
             {task.descricao && <p style={{ fontSize: 12, color: 'var(--fx-text-2)', lineHeight: 1.6, marginBottom: 10 }}>{task.descricao}</p>}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-              <span className="fx-chip">{task.id}</span>
+              <span className="fx-chip">{task.codigo}</span>
               <span className={`fx-chip`} style={{ color: statusColors[severidadeColor(task.severidade)] }}><span className={`fx-dot ${severidadeColor(task.severidade)}`} />{SEVERIDADE_LABELS[task.severidade]}</span>
               <span className="fx-chip">{task.horas}h estimadas</span>
             </div>
@@ -658,22 +895,22 @@ function TaskCard({ task, now, aberta, onToggle, onStart, onStop, onStatus, onDe
               </label>
             </div>
 
-            {isManager && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                {statusList.map(s => (
-                  <button key={s} className={`fx-chip ${task.status === s ? 'active' : ''}`} onClick={() => onStatus(task.id, s)}>{STATUS_LABELS[s]}</button>
-                ))}
-              </div>
-            )}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+              {ALL_STATUS.map(s => (
+                <button key={s} className={`fx-chip ${task.status === s ? 'active' : ''}`} onClick={() => onStatus(task.id, s)}>{STATUS_LABELS[s]}</button>
+              ))}
+            </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
-              {task.rodando ? (
-                <button className="fx-btn-pill" style={{ flex: 1 }} onClick={() => onStop(task.id)}>⏸ Pausar</button>
-              ) : souResponsavel ? (
-                <button className="fx-btn-pill" style={{ flex: 1 }} onClick={() => onStart(task.id)}>▶ Iniciar</button>
+              {minha ? (
+                minha.rodando ? (
+                  <button className="fx-btn-pill" style={{ flex: 1 }} onClick={() => onStop(task.id)}>⏸ Pausar</button>
+                ) : (
+                  <button className="fx-btn-pill" style={{ flex: 1 }} onClick={() => onStart(task.id)}>▶ Iniciar</button>
+                )
               ) : (
                 <span style={{ flex: 1, fontSize: 12, color: 'var(--fx-text-4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  Aguardando início pelo responsável
+                  {algumRodando(task) ? 'Em execução pela equipe' : 'Aguardando início pelo responsável'}
                 </span>
               )}
               <button className="fx-btn-sq danger" style={{ width: 44, height: 44, borderRadius: 12 }} onClick={() => onDelete(task.id)}>
@@ -682,6 +919,8 @@ function TaskCard({ task, now, aberta, onToggle, onStart, onStop, onStatus, onDe
                 </svg>
               </button>
             </div>
+
+            <TimeLogHistory taskId={task.id} currentUserId={currentUserId} souGerente onAlterado={onRecarregar} />
           </div>
         )}
       </div>

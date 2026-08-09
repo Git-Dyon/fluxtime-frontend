@@ -1,0 +1,75 @@
+.bar {
+  display: flex;
+  gap: 8px;
+  margin: 0 26px 10px;
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.chip {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 18px;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card);
+  padding: 8px 10px;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  cursor: default;
+}
+
+.titulo {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--fx-text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timer {
+  font-size: 10.5px;
+  color: var(--fx-text-3);
+}
+
+.playBtn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-btn-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.playBtn.playing {
+  box-shadow: var(--shadow-inset-btn);
+}
+
+.renameInput {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-inset-field);
+  border-radius: 10px;
+  padding: 5px 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--fx-text-input);
+  font-family: var(--font);
+}
