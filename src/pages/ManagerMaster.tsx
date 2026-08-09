@@ -3,8 +3,10 @@ import { TitleBar } from '../components/TitleBar';
 import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
 import { RequisicoesSheet } from '../components/RequisicoesSheet';
+import { AuditoriaSheet } from '../components/AuditoriaSheet';
 import { api, ApiError, clearToken } from '../lib/api';
-import type { Requisicao, User, UsuarioCongelado } from '../lib/types';
+import type { Pagina, Requisicao, User, UsuarioCongelado } from '../lib/types';
+import { FUSOS_COMUNS } from '../lib/utils';
 import styles from './ManagerMaster.module.css';
 
 interface Props {
@@ -17,7 +19,7 @@ type Bloqueios = {
   tasksProprias: { id: string; codigo: string; titulo: string }[];
 };
 
-type Sheet = null | 'novo' | 'vincular' | 'reatribuir' | 'editar' | 'requisicoes' | 'freezer' | 'novaRequisicao';
+type Sheet = null | 'novo' | 'vincular' | 'reatribuir' | 'editar' | 'requisicoes' | 'freezer' | 'novaRequisicao' | 'auditoria';
 
 /** Ações sobre usuário tutelado que a API só aceita via requisição (G2). */
 type PedidoPendente = {
@@ -50,6 +52,7 @@ export function ManagerMaster({ user, onLogout }: Props) {
   const [editNome, setEditNome] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editCargo, setEditCargo] = useState('');
+  const [editFuso, setEditFuso] = useState('America/Sao_Paulo');
   const [editErro, setEditErro] = useState('');
   const [editResetSucesso, setEditResetSucesso] = useState('');
 
@@ -58,11 +61,13 @@ export function ManagerMaster({ user, onLogout }: Props) {
   const [pedido, setPedido] = useState<PedidoPendente | null>(null);
   const [pedidoJustificativa, setPedidoJustificativa] = useState('');
   const [pedidoErro, setPedidoErro] = useState('');
+  /** Gerentes + usuários — alimenta o filtro "quem fez" da trilha de auditoria. */
+  const [todosUsuarios, setTodosUsuarios] = useState<User[]>([]);
 
   const load = useCallback(async () => {
     const [g, u, r, c] = await Promise.all([
       api.get<any[]>('/users/managers'),
-      api.get<User[]>('/users'),
+      api.get<Pagina<User>>('/users?limite=200'),
       api.get<Requisicao[]>('/requisicoes'),
       api.get<UsuarioCongelado[]>('/users/congelados'),
     ]);
@@ -76,7 +81,8 @@ export function ManagerMaster({ user, onLogout }: Props) {
       })
     );
     setGerentes(gerentesComEquipe);
-    setUsuarios(u.filter((u: User) => u.perfil === 'USER'));
+    setTodosUsuarios(u.itens);
+    setUsuarios(u.itens.filter((x) => x.perfil === 'USER'));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -234,7 +240,7 @@ export function ManagerMaster({ user, onLogout }: Props) {
     if (!editNome.trim() || !editEmail.trim()) { setEditErro('Nome e e-mail são obrigatórios.'); return; }
     setSalvando(true); setEditErro(''); setEditResetSucesso('');
     try {
-      await api.put(`/users/${editUser.id}`, { nome: editNome, email: editEmail, cargo: editCargo });
+      await api.put(`/users/${editUser.id}`, { nome: editNome, email: editEmail, cargo: editCargo, timezone: editFuso });
       setSheet(null); setEditUser(null);
       await load();
     } catch (e: any) { setEditErro(e.message); }
@@ -305,6 +311,14 @@ export function ManagerMaster({ user, onLogout }: Props) {
               }}>{congelados.length}</span>
             )}
           </button>
+          {/* Trilha de auditoria (G8): exclusiva do master — é a única visão que
+              enxerga o que os gerentes fizeram, não só os usuários. */}
+          <button className={styles.sairBtn} onClick={() => setSheet('auditoria')} title="Trilha de auditoria">
+            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5.5 2.5h6l3.5 3.5v11a.5.5 0 01-.5.5H5.5a.5.5 0 01-.5-.5v-14a.5.5 0 01.5-.5z" />
+              <path d="M11 2.5V6h3.5M7.5 10h5M7.5 13h3.5" />
+            </svg>
+          </button>
           <button className={styles.sairBtn} onClick={handleLogout} title="Sair">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
@@ -356,7 +370,7 @@ export function ManagerMaster({ user, onLogout }: Props) {
                 <span className={styles.gerenteEmail}>{g.cargo || 'Gerente'}</span>
               </div>
               <div className={`fx-chip ${abertos[g.id] ? 'active' : ''}`}>{g.totalUsuarios || g.equipe?.length || 0} usuários</div>
-              <button className="fx-btn-sq" onClick={(e) => { e.stopPropagation(); setEditUser(g); setEditNome(g.nome); setEditEmail(g.email); setEditCargo(g.cargo || ''); setEditErro(''); setEditResetSucesso(''); setSheet('editar'); }} title="Editar gerente">
+              <button className="fx-btn-sq" onClick={(e) => { e.stopPropagation(); setEditUser(g); setEditNome(g.nome); setEditEmail(g.email); setEditCargo(g.cargo || ''); setEditFuso(g.timezone || 'America/Sao_Paulo'); setEditErro(''); setEditResetSucesso(''); setSheet('editar'); }} title="Editar gerente">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                   <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z" />
@@ -427,7 +441,7 @@ export function ManagerMaster({ user, onLogout }: Props) {
                 }
               </span>
             </div>
-            <button className="fx-btn-sq" onClick={(e) => { e.stopPropagation(); setEditUser(u); setEditNome(u.nome); setEditEmail(u.email); setEditCargo(u.cargo || ''); setEditErro(''); setEditResetSucesso(''); setSheet('editar'); }} title="Editar usuário">
+            <button className="fx-btn-sq" onClick={(e) => { e.stopPropagation(); setEditUser(u); setEditNome(u.nome); setEditEmail(u.email); setEditCargo(u.cargo || ''); setEditFuso(u.timezone || 'America/Sao_Paulo'); setEditErro(''); setEditResetSucesso(''); setSheet('editar'); }} title="Editar usuário">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                 <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z" />
@@ -505,6 +519,14 @@ export function ManagerMaster({ user, onLogout }: Props) {
           meuId={user.id}
           onClose={() => setSheet(null)}
           onResolvida={load}
+        />
+      )}
+
+      {sheet === 'auditoria' && (
+        <AuditoriaSheet
+          timezone={user.timezone ?? 'America/Sao_Paulo'}
+          pessoas={todosUsuarios}
+          onClose={() => setSheet(null)}
         />
       )}
 
@@ -745,8 +767,15 @@ export function ManagerMaster({ user, onLogout }: Props) {
             <div className="fx-field">
               <input placeholder="Cargo (ex: Desenvolvedor, Design)" value={editCargo} onChange={e => setEditCargo(e.target.value)} />
             </div>
+            {/* Define o que é "hoje" nos relatórios desta pessoa (G10). */}
+            <div className="fx-field">
+              <select value={editFuso} onChange={e => setEditFuso(e.target.value)}>
+                {!FUSOS_COMUNS.some(f => f.valor === editFuso) && <option value={editFuso}>{editFuso}</option>}
+                {FUSOS_COMUNS.map(f => <option key={f.valor} value={f.valor}>Fuso: {f.rotulo}</option>)}
+              </select>
+            </div>
 
-            {editErro && <p style={{ fontSize: 11.5, color: 'var(--fx-error)', textAlign: 'center' }}>{editErro}</p>}
+            {editErro &&<p style={{ fontSize: 11.5, color: 'var(--fx-error)', textAlign: 'center' }}>{editErro}</p>}
             {editResetSucesso && <p style={{ fontSize: 11.5, color: 'var(--fx-green)', textAlign: 'center' }}>{editResetSucesso}</p>}
 
             <div style={{ display: 'flex', gap: 10 }}>

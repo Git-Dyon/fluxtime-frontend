@@ -67,6 +67,19 @@ export function App() {
     }
   }, [abrirSessao, encerrarSessao]);
 
+  /**
+   * O usuário mexeu numa preferência (hoje, o fuso) — relê o perfil do servidor
+   * em vez de remendar o objeto local, pelo mesmo motivo de `handleSenhaTrocada`:
+   * quem diz o estado da conta é a API.
+   */
+  const handlePerfilAtualizado = useCallback(async () => {
+    try {
+      setUser(await api.get<User>('/auth/me'));
+    } catch {
+      /* silêncio: um 401 já derruba a sessão pelo onSessaoExpirada */
+    }
+  }, []);
+
   if (verificando) {
     return (
       <div className="app-window">
@@ -88,7 +101,7 @@ export function App() {
 
     switch (user.perfil) {
       case 'MANAGER_MASTER': return <ManagerMaster user={user} onLogout={encerrarSessao} />;
-      case 'MANAGER':        return <Manager user={user} onLogout={encerrarSessao} />;
+      case 'MANAGER':        return <Manager user={user} onLogout={encerrarSessao} onPerfilAtualizado={handlePerfilAtualizado} />;
       case 'USER':           return <UserPage user={user} onLogout={encerrarSessao} />;
       default:               return <Login onLogin={handleLogin} />;
     }
