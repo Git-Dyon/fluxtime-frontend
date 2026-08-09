@@ -2,11 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { TitleBar } from '../components/TitleBar';
 import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
+import { EspeciaisBar } from '../components/EspeciaisBar';
+import { TimeLogHistory } from '../components/TimeLogHistory';
 import { api, uploadFile, downloadFile } from '../lib/api';
 import { subscribeTaskEvents } from '../lib/socket';
 import type { Task, User } from '../lib/types';
 import { useNow } from '../hooks/useNow';
-import { calcTotalSeconds, deadlineClass, deadlineLabel, formatSeconds, formatHM, severidadeColor, STATUS_LABELS, SEVERIDADE_LABELS } from '../lib/utils';
+import {
+  calcMeusSegundos, deadlineClass, deadlineLabel, formatSeconds, formatHM,
+  minhaAtribuicao, severidadeColor, STATUS_LABELS, SEVERIDADE_LABELS,
+} from '../lib/utils';
 import styles from './User.module.css';
 
 interface Props { user: User; onLogout: () => void; }
@@ -45,9 +50,12 @@ export function User({ user, onLogout }: Props) {
   useEffect(() => { load(); }, [load]);
   useEffect(() => subscribeTaskEvents(load), [load]);
 
-  const totalDia = tasks.reduce((s, t) => s + calcTotalSeconds(t, now), 0);
-  const focoTask = tasks.find(t => t.rodando);
-  const ordenadas = [...tasks].sort((a, b) => {
+  const comuns = tasks.filter(t => t.tipo === 'COMUM');
+  const especiais = tasks.filter(t => t.tipo === 'ESPECIAL').sort((a, b) => (a.ordemFixa ?? 0) - (b.ordemFixa ?? 0));
+
+  const totalDia = tasks.reduce((s, t) => s + calcMeusSegundos(t, user.id, now), 0);
+  const focoTask = comuns.find(t => minhaAtribuicao(t, user.id)?.rodando);
+  const ordenadas = [...comuns].sort((a, b) => {
     const sevOrder = { CRITICA: 4, ALTA: 3, MEDIA: 2, BAIXA: 1 };
     const diff = sevOrder[b.severidade] - sevOrder[a.severidade];
     if (diff !== 0) return diff;
@@ -55,12 +63,12 @@ export function User({ user, onLogout }: Props) {
   });
 
   const handleStart = async (id: string) => {
-    await api.post(`/tasks/${id}/start`, {});
+    await api.post(`/tasks/${id}/start`);
     await load();
   };
 
   const handleStop = async (id: string) => {
-    await api.post(`/tasks/${id}/stop`, {});
+    await api.post(`/tasks/${id}/stop`);
     await load();
   };
 
@@ -76,6 +84,11 @@ export function User({ user, onLogout }: Props) {
     await api.post(`/tasks/${id}/manual`, { inicio: ini, fim });
     setManualInicio(m => ({ ...m, [id]: '' }));
     setManualFim(m => ({ ...m, [id]: '' }));
+    await load();
+  };
+
+  const handleDelete = async (id: string) => {
+    await api.delete(`/tasks/${id}`);
     await load();
   };
 
@@ -99,12 +112,12 @@ export function User({ user, onLogout }: Props) {
     try {
       const today = new Date(); today.setDate(today.getDate() + 7);
       const t = await api.post<Task>('/tasks', {
-        titulo: quickTitle, userId: user.id, status: 'ATUANDO',
+        titulo: quickTitle, status: 'ATUANDO',
         severidade: 'BAIXA', horas: 1,
         dataFinal: today.toISOString().split('T')[0],
       });
       setQuickTitle('');
-      await api.post(`/tasks/${t.id}/start`, {});
+      await api.post(`/tasks/${t.id}/start`);
       await load();
     } finally { setCriando(false); }
   };
@@ -117,7 +130,7 @@ export function User({ user, onLogout }: Props) {
       await api.post('/tasks', {
         titulo: fTitulo, descricao: fDesc, empresa: fEmpresa, projeto: fProjeto,
         horas: parseFloat(fHoras) || 1, dataFinal: fData || today.toISOString().split('T')[0],
-        severidade: fSev, status: 'BACK_LOG', userId: user.id,
+        severidade: fSev, status: 'BACK_LOG',
       });
       setSheet(false);
       setFTitulo(''); setFDesc(''); setFEmpresa(''); setFProjeto('');
@@ -196,12 +209,12 @@ export function User({ user, onLogout }: Props) {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <span className={`${styles.focoClock} fx-tabular`}>{formatSeconds(calcTotalSeconds(focoTask, now))}</span>
+                  <span className={`${styles.focoClock} fx-tabular`}>{formatSeconds(calcMeusSegundos(focoTask, user.id, now))}</span>
                   <button
-                    className={`${styles.playBtnLg} ${focoTask.rodando ? styles.playing : ''}`}
-                    onClick={() => focoTask.rodando ? handleStop(focoTask.id) : handleStart(focoTask.id)}
+                    className={`${styles.playBtnLg} ${minhaAtribuicao(focoTask, user.id)?.rodando ? styles.playing : ''}`}
+                    onClick={() => minhaAtribuicao(focoTask, user.id)?.rodando ? handleStop(focoTask.id) : handleStart(focoTask.id)}
                   >
-                    {focoTask.rodando ? (
+                    {minhaAtribuicao(focoTask, user.id)?.rodando ? (
                       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                         <rect x="3" y="3" width="4" height="12" rx="1" fill="var(--fx-accent)" />
                         <rect x="11" y="3" width="4" height="12" rx="1" fill="var(--fx-accent)" />
@@ -216,12 +229,12 @@ export function User({ user, onLogout }: Props) {
 
                 <div className="fx-progress-track" style={{ margin: '10px 0 6px' }}>
                   <div className="fx-progress-fill" style={{
-                    width: `${Math.min(100, (calcTotalSeconds(focoTask, now) / (focoTask.horas * 3600)) * 100)}%`,
+                    width: `${Math.min(100, (calcMeusSegundos(focoTask, user.id, now) / (focoTask.horas * 3600)) * 100)}%`,
                     background: statusColors[deadlineClass(focoTask.dataFinal, focoTask.status)]
                   }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--fx-text-3)' }}>
-                  <span>Restam {formatHM(Math.max(0, focoTask.horas * 3600 - calcTotalSeconds(focoTask, now)))} de execução</span>
+                  <span>Restam {formatHM(Math.max(0, focoTask.horas * 3600 - calcMeusSegundos(focoTask, user.id, now)))} de execução</span>
                   <span>{deadlineLabel(focoTask.dataFinal)}</span>
                 </div>
               </div>
@@ -243,7 +256,8 @@ export function User({ user, onLogout }: Props) {
             {ordenadas.length === 0 ? (
               <p className={styles.vazio}>Nenhuma task atribuída.</p>
             ) : ordenadas.map(t => {
-              const total = calcTotalSeconds(t, now);
+              const minha = minhaAtribuicao(t, user.id);
+              const total = calcMeusSegundos(t, user.id, now);
               const dlClass = deadlineClass(t.dataFinal, t.status);
               const progress = Math.min(100, (total / (t.horas * 3600)) * 100);
 
@@ -255,6 +269,11 @@ export function User({ user, onLogout }: Props) {
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fx-text-1)', lineHeight: 1.3 }}>{t.titulo}</div>
                         {t.empresa && <div style={{ fontSize: 10, color: 'var(--fx-text-3)', marginTop: 2 }}>{t.empresa} · {t.projeto}</div>}
+                        {t.atribuicoes.length > 1 && (
+                          <div style={{ fontSize: 10, color: 'var(--fx-text-3)', marginTop: 2 }}>
+                            + {t.atribuicoes.filter(a => a.userId !== user.id).map(a => a.nome.split(' ')[0]).join(', ')}
+                          </div>
+                        )}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                         <span className={`fx-chip`} style={{ color: statusColors[severidadeColor(t.severidade)] }}>
@@ -266,7 +285,7 @@ export function User({ user, onLogout }: Props) {
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, fontSize: 10.5, color: 'var(--fx-text-3)' }}>
                       <span>{deadlineLabel(t.dataFinal)}</span>
-                      <span className={`fx-tabular`} style={{ fontSize: 12, fontWeight: 700, color: t.rodando ? 'var(--fx-accent)' : 'var(--fx-text-2)' }}>
+                      <span className={`fx-tabular`} style={{ fontSize: 12, fontWeight: 700, color: minha?.rodando ? 'var(--fx-accent)' : 'var(--fx-text-2)' }}>
                         {formatSeconds(total)}
                       </span>
                     </div>
@@ -277,7 +296,7 @@ export function User({ user, onLogout }: Props) {
                         {t.descricao && <p style={{ fontSize: 12, color: 'var(--fx-text-2)', lineHeight: 1.6, marginBottom: 10 }}>{t.descricao}</p>}
 
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                          <span className="fx-chip">{t.id}</span>
+                          <span className="fx-chip">{t.codigo}</span>
                           <span className="fx-chip">{t.horas}h estimadas</span>
                           <span className="fx-chip">Entrega {new Date(t.dataFinal).toLocaleDateString('pt-BR')}</span>
                         </div>
@@ -314,7 +333,7 @@ export function User({ user, onLogout }: Props) {
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--fx-text-3)', marginBottom: 12 }}>
                           <span>Restam {formatHM(Math.max(0, t.horas * 3600 - total))}</span>
-                          <span>{t.creator ? `Criada por ${t.creator.nome.split(' ')[0]}` : 'Criada por mim'}</span>
+                          <span>{t.criador && t.criador.id !== user.id ? `Criada por ${t.criador.nome.split(' ')[0]}` : 'Criada por mim'}</span>
                         </div>
 
                         {/* Status (sem Concluído) */}
@@ -328,13 +347,15 @@ export function User({ user, onLogout }: Props) {
                         </p>
 
                         {/* Play/Pause */}
-                        <button
-                          className="fx-btn-pill"
-                          style={{ width: '100%', marginBottom: 12 }}
-                          onClick={() => t.rodando ? handleStop(t.id) : handleStart(t.id)}
-                        >
-                          {t.rodando ? '⏸ Pausar execução' : '▶ Iniciar execução'}
-                        </button>
+                        {minha && (
+                          <button
+                            className="fx-btn-pill"
+                            style={{ width: '100%', marginBottom: 12 }}
+                            onClick={() => minha.rodando ? handleStop(t.id) : handleStart(t.id)}
+                          >
+                            {minha.rodando ? '⏸ Pausar execução' : '▶ Iniciar execução'}
+                          </button>
+                        )}
 
                         {/* Lançamento manual */}
                         <div style={{ background: 'var(--fx-surface)', borderRadius: 16, padding: '12px 14px', boxShadow: 'var(--shadow-inset-field)' }}>
@@ -354,6 +375,19 @@ export function User({ user, onLogout }: Props) {
                             </button>
                           </div>
                         </div>
+
+                        <TimeLogHistory taskId={t.id} currentUserId={user.id} souGerente={false} onAlterado={load} />
+
+                        {/* Excluir — só quem criou a própria task */}
+                        {t.criador?.id === user.id && (
+                          <button
+                            className="fx-btn-pill"
+                            style={{ width: '100%', marginTop: 12, color: 'var(--fx-error)' }}
+                            onClick={() => handleDelete(t.id)}
+                          >
+                            Excluir task
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -363,8 +397,10 @@ export function User({ user, onLogout }: Props) {
           </>
         )}
 
-        <div style={{ height: 80 }} />
+        <div style={{ height: especiais.length > 0 ? 168 : 80 }} />
       </div>
+
+      <EspeciaisBar especiais={especiais} userId={user.id} now={now} onStart={handleStart} onStop={handleStop} />
 
       {/* Navbar */}
       <div className={styles.navbar}>

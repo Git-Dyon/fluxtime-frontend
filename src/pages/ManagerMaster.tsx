@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { TitleBar } from '../components/TitleBar';
 import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
+import { RequisicoesSheet } from '../components/RequisicoesSheet';
 import { api, ApiError, clearToken } from '../lib/api';
-import type { User } from '../lib/types';
+import type { Requisicao, User, UsuarioCongelado } from '../lib/types';
 import styles from './ManagerMaster.module.css';
 
 interface Props {
@@ -16,7 +17,14 @@ type Bloqueios = {
   tasksProprias: { id: string; codigo: string; titulo: string }[];
 };
 
-type Sheet = null | 'novo' | 'vincular' | 'reatribuir' | 'editar';
+type Sheet = null | 'novo' | 'vincular' | 'reatribuir' | 'editar' | 'requisicoes' | 'freezer' | 'novaRequisicao';
+
+/** Ações sobre usuário tutelado que a API só aceita via requisição (G2). */
+type PedidoPendente = {
+  alvo: User;
+  tipo: 'REMOVER_DA_EQUIPE' | 'MOVER_DE_EQUIPE';
+  gerenteDestinoId?: string;
+};
 
 export function ManagerMaster({ user, onLogout }: Props) {
   const [aba, setAba] = useState<'gerentes' | 'usuarios'>('gerentes');
@@ -45,11 +53,21 @@ export function ManagerMaster({ user, onLogout }: Props) {
   const [editErro, setEditErro] = useState('');
   const [editResetSucesso, setEditResetSucesso] = useState('');
 
+  const [requisicoes, setRequisicoes] = useState<Requisicao[]>([]);
+  const [congelados, setCongelados] = useState<UsuarioCongelado[]>([]);
+  const [pedido, setPedido] = useState<PedidoPendente | null>(null);
+  const [pedidoJustificativa, setPedidoJustificativa] = useState('');
+  const [pedidoErro, setPedidoErro] = useState('');
+
   const load = useCallback(async () => {
-    const [g, u] = await Promise.all([
+    const [g, u, r, c] = await Promise.all([
       api.get<any[]>('/users/managers'),
       api.get<User[]>('/users'),
+      api.get<Requisicao[]>('/requisicoes'),
+      api.get<UsuarioCongelado[]>('/users/congelados'),
     ]);
+    setRequisicoes(r);
+    setCongelados(c);
     // Load teams for each manager
     const gerentesComEquipe = await Promise.all(
       g.map(async (ger: any) => {
@@ -90,14 +108,38 @@ export function ManagerMaster({ user, onLogout }: Props) {
     setSalvando(false);
   };
 
+  /** true se a API recusou a ação exigindo o fluxo de requisição de 3 dias (G2). */
+  const exigeRequisicao = (e: unknown): boolean =>
+    e instanceof ApiError && e.data?.detalhes?.codigo === 'REQUISICAO_NECESSARIA';
+
+  const abrirPedido = (alvo: User, tipo: PedidoPendente['tipo'], gerenteDestinoId?: string) => {
+    setPedido({ alvo, tipo, gerenteDestinoId });
+    setPedidoJustificativa('');
+    setPedidoErro('');
+    setSheet('novaRequisicao');
+  };
+
   const handleVincular = async (userId: string) => {
-    await api.put(`/users/${userId}/assign`, { gerenteId: alvoGerente });
-    setSheet(null); await load();
+    const alvo = usuarios.find(u => u.id === userId);
+    try {
+      await api.put(`/users/${userId}/assign`, { gerenteId: alvoGerente });
+      setSheet(null); await load();
+    } catch (e) {
+      // Já está sob outro gerente: mover exige requisição com prazo.
+      if (exigeRequisicao(e) && alvo) abrirPedido(alvo, 'MOVER_DE_EQUIPE', alvoGerente);
+      else throw e;
+    }
   };
 
   const handleDesvincular = async (userId: string) => {
-    await api.put(`/users/${userId}/unassign`, {});
-    await load();
+    const alvo = usuarios.find(u => u.id === userId);
+    try {
+      await api.put(`/users/${userId}/unassign`);
+      await load();
+    } catch (e) {
+      if (exigeRequisicao(e) && alvo) abrirPedido(alvo, 'REMOVER_DA_EQUIPE');
+      else throw e;
+    }
   };
 
   const handlePromover = async (userId: string) => {
@@ -112,15 +154,23 @@ export function ManagerMaster({ user, onLogout }: Props) {
     setSheet('reatribuir');
   };
 
+  /** "Excluir" manda para o freezer de 7 dias, não apaga (G1). */
   const handleExcluir = async (id: string) => {
+    const alvo = usuarios.find(u => u.id === id) ?? gerentes.find(g => g.id === id);
     try {
       await api.delete(`/users/${id}`);
       if (id === alvoExclusao) setSheet(null);
       await load();
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) abrirBloqueio(id, 'excluir', e);
+      else if (exigeRequisicao(e) && alvo) abrirPedido(alvo as User, 'REMOVER_DA_EQUIPE');
       else throw e;
     }
+  };
+
+  const handleResgatar = async (id: string) => {
+    await api.post(`/users/${id}/resgatar`);
+    await load();
   };
 
   const handleRebaixar = async (id: string) => {
@@ -134,6 +184,24 @@ export function ManagerMaster({ user, onLogout }: Props) {
     }
   };
 
+  const handleEnviarPedido = async () => {
+    if (!pedido) return;
+    setSalvando(true);
+    setPedidoErro('');
+    try {
+      await api.post('/requisicoes', {
+        tipo: pedido.tipo,
+        alvoId: pedido.alvo.id,
+        gerenteDestinoId: pedido.gerenteDestinoId,
+        justificativa: pedidoJustificativa.trim(),
+      });
+      setSheet(null); setPedido(null);
+      await load();
+    } catch (e: any) {
+      setPedidoErro(e instanceof ApiError ? e.message : 'Não foi possível abrir a requisição.');
+    } finally { setSalvando(false); }
+  };
+
   const refreshBloqueios = useCallback(async () => {
     if (!alvoExclusao) return;
     const b = await api.get<Bloqueios>(`/users/${alvoExclusao}/deletion-blockers`);
@@ -141,13 +209,20 @@ export function ManagerMaster({ user, onLogout }: Props) {
   }, [alvoExclusao]);
 
   const handleReatribuirMembro = async (userId: string, gerenteId: string) => {
-    await api.put(`/users/${userId}/assign`, { gerenteId });
-    await refreshBloqueios();
-    await load();
+    const alvo = usuarios.find(u => u.id === userId);
+    try {
+      await api.put(`/users/${userId}/assign`, { gerenteId });
+      await refreshBloqueios();
+      await load();
+    } catch (e) {
+      if (exigeRequisicao(e) && alvo) abrirPedido(alvo, 'MOVER_DE_EQUIPE', gerenteId);
+      else throw e;
+    }
   };
 
+  /** deUserId é o gerente sendo esvaziado; userId é quem recebe o vínculo. */
   const handleReatribuirTask = async (taskId: string, userId: string) => {
-    await api.put(`/tasks/${taskId}/reassign`, { userId });
+    await api.put(`/tasks/${taskId}/reassign`, { deUserId: alvoExclusao, userId });
     await refreshBloqueios();
   };
 
@@ -179,6 +254,7 @@ export function ManagerMaster({ user, onLogout }: Props) {
   const handleLogout = () => { clearToken(); onLogout(); };
 
   const usuariosSemGerente = usuarios.filter(u => !u.gerenteId);
+  const reqPendentes = requisicoes.filter(r => r.status === 'PENDENTE');
 
   return (
     <>
@@ -193,12 +269,49 @@ export function ManagerMaster({ user, onLogout }: Props) {
             <div className={styles.nome}>{user.nome}</div>
           </div>
         </div>
-        <button className={styles.sairBtn} onClick={handleLogout} title="Sair">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-            <polyline points="3 3 3 8 8 8" />
-          </svg>
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            className={styles.sairBtn}
+            style={{ position: 'relative' }}
+            onClick={() => setSheet('requisicoes')}
+            title="Requisições"
+          >
+            <svg width="17" height="17" viewBox="0 0 20 20" fill="none">
+              <path d="M10 2.5v7.5l4.5 2.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.7" />
+            </svg>
+            {reqPendentes.length > 0 && (
+              <span style={{
+                position: 'absolute', top: -2, right: -2, minWidth: 17, height: 17, padding: '0 4px',
+                borderRadius: 9, background: 'var(--fx-error)', color: '#fff', fontSize: 10,
+                fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>{reqPendentes.length}</span>
+            )}
+          </button>
+          <button
+            className={styles.sairBtn}
+            style={{ position: 'relative' }}
+            onClick={() => setSheet('freezer')}
+            title="Freezer"
+          >
+            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+              <path d="M10 2.5v15M3.5 6.25l13 7.5M16.5 6.25l-13 7.5" />
+            </svg>
+            {congelados.length > 0 && (
+              <span style={{
+                position: 'absolute', top: -2, right: -2, minWidth: 17, height: 17, padding: '0 4px',
+                borderRadius: 9, background: 'var(--fx-accent)', color: '#fff', fontSize: 10,
+                fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>{congelados.length}</span>
+            )}
+          </button>
+          <button className={styles.sairBtn} onClick={handleLogout} title="Sair">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <polyline points="3 3 3 8 8 8" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Título */}
@@ -379,6 +492,87 @@ export function ManagerMaster({ user, onLogout }: Props) {
               onClick={() => setCredencial(null)}
             >
               Já anotei, fechar
+            </button>
+          </div>
+        </BottomSheet>
+      )}
+
+      {/* Bottom sheet: Requisições (G2) */}
+      {sheet === 'requisicoes' && (
+        <RequisicoesSheet
+          requisicoes={requisicoes}
+          souMaster
+          meuId={user.id}
+          onClose={() => setSheet(null)}
+          onResolvida={load}
+        />
+      )}
+
+      {/* Bottom sheet: Freezer de 7 dias (G1) */}
+      {sheet === 'freezer' && (
+        <BottomSheet onClose={() => setSheet(null)} title="Freezer">
+          <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <p style={{ fontSize: 12, color: 'var(--fx-text-2)', lineHeight: 1.6 }}>
+              Excluir um usuário não apaga nada de imediato: ele fica aqui por 7 dias e pode ser
+              resgatado. Depois disso, os dados pessoais são anonimizados — as horas trabalhadas
+              permanecem no histórico.
+            </p>
+            {congelados.length === 0 ? (
+              <p className={styles.vazio}>Ninguém no freezer.</p>
+            ) : congelados.map(c => (
+              <div key={c.id} className={styles.membroRow}>
+                <Avatar nome={c.nome} size={36} inset />
+                <div className={styles.membroInfo}>
+                  <span className={styles.membroNome}>{c.nome}</span>
+                  <span className={styles.membroCargo}>
+                    {c.diasRestantes > 0
+                      ? `Expurgo em ${c.diasRestantes} dia${c.diasRestantes === 1 ? '' : 's'}`
+                      : 'Expurgo iminente'}
+                    {c.congeladoPorNome ? ` · por ${c.congeladoPorNome}` : ''}
+                  </span>
+                </div>
+                <button
+                  className="fx-btn-pill"
+                  style={{ height: 34, fontSize: 12, padding: '0 14px' }}
+                  onClick={() => handleResgatar(c.id)}
+                >
+                  Resgatar
+                </button>
+              </div>
+            ))}
+          </div>
+        </BottomSheet>
+      )}
+
+      {/* Bottom sheet: Abrir requisição sobre usuário tutelado (G2) */}
+      {sheet === 'novaRequisicao' && pedido && (
+        <BottomSheet onClose={() => { setSheet(null); setPedido(null); }} title="Abrir requisição">
+          <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <p style={{ fontSize: 12.5, color: 'var(--fx-text-1)', lineHeight: 1.6 }}>
+              <strong>{pedido.alvo.nome}</strong> está sob a tutela de um gerente, então esta
+              mudança não é imediata.
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--fx-text-2)', lineHeight: 1.6 }}>
+              {pedido.tipo === 'REMOVER_DA_EQUIPE'
+                ? 'O gerente atual tem 3 dias para responder. Se não responder, a remoção é aplicada automaticamente.'
+                : `A mudança para a equipe de ${gerentes.find(g => g.id === pedido.gerenteDestinoId)?.nome ?? '—'} será aplicada automaticamente se o gerente atual não responder em 3 dias.`}
+            </p>
+            <div className="fx-field" style={{ height: 'auto', padding: '10px 18px' }}>
+              <textarea
+                placeholder="Justificativa (opcional, mas ajuda o gerente a decidir)"
+                value={pedidoJustificativa}
+                onChange={e => setPedidoJustificativa(e.target.value)}
+                rows={3}
+              />
+            </div>
+            {pedidoErro && <p style={{ fontSize: 11.5, color: 'var(--fx-error)', textAlign: 'center' }}>{pedidoErro}</p>}
+            <button
+              className="fx-btn-pill"
+              style={{ width: '100%', height: 50, fontSize: 14 }}
+              onClick={handleEnviarPedido}
+              disabled={salvando}
+            >
+              {salvando ? <div className="fx-spinner" /> : 'Abrir requisição'}
             </button>
           </div>
         </BottomSheet>

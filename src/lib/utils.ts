@@ -1,4 +1,4 @@
-import type { Severidade, Status } from './types';
+import type { Atribuicao, Severidade, Status, Task } from './types';
 
 export function initials(nome: string): string {
   const parts = nome.trim().split(/\s+/);
@@ -51,6 +51,7 @@ export function deadlineLabel(dataFinal: string): string {
   if (diff < 0) return 'Vencida';
   if (diff === 0) return `Vence hoje · ${new Date(dataFinal).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
   if (diff === 1) return 'Vence amanhã';
+  if (diff > 1000) return 'Sem prazo'; // tasks especiais (G4): dataFinal fica ~100 anos no futuro
   return `Vence em ${diff} dias`;
 }
 
@@ -58,7 +59,29 @@ export function severidadeColor(sev: Severidade): string {
   return { BAIXA: 'green', MEDIA: 'yellow', ALTA: 'orange', CRITICA: 'red' }[sev] as string;
 }
 
-export function calcTotalSeconds(task: { segundosExecutados: number; rodando: boolean; iniciadoEm: number | null }, now: number): number {
-  const extra = task.rodando && task.iniciadoEm ? Math.floor((now - task.iniciadoEm) / 1000) : 0;
-  return task.segundosExecutados + extra;
+/** Segundos acumulados de UM vínculo, somando a sessão em curso se estiver rodando. */
+export function calcAtribuicaoSeconds(a: Pick<Atribuicao, 'segundosExecutados' | 'rodando' | 'iniciadoEm'>, now: number): number {
+  const extra = a.rodando && a.iniciadoEm ? Math.floor((now - a.iniciadoEm) / 1000) : 0;
+  return a.segundosExecutados + extra;
+}
+
+/** Vínculo de uma pessoa específica numa task, ou undefined se ela não for responsável. */
+export function minhaAtribuicao(task: Task, userId: string): Atribuicao | undefined {
+  return task.atribuicoes.find((a) => a.userId === userId);
+}
+
+/** Segundos de UM responsável específico numa task — o caso comum ao renderizar "minha" task. */
+export function calcMeusSegundos(task: Task, userId: string, now: number): number {
+  const a = minhaAtribuicao(task, userId);
+  return a ? calcAtribuicaoSeconds(a, now) : 0;
+}
+
+/** Soma de todos os responsáveis — visão do gerente sobre o total investido na task. */
+export function calcTotalSeconds(task: Task, now: number): number {
+  return task.atribuicoes.reduce((s, a) => s + calcAtribuicaoSeconds(a, now), 0);
+}
+
+/** true se QUALQUER responsável estiver com o cronômetro rodando nesta task. */
+export function algumRodando(task: Task): boolean {
+  return task.atribuicoes.some((a) => a.rodando);
 }
