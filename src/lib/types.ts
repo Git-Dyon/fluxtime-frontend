@@ -14,6 +14,27 @@ export interface User {
   totalUsuarios?: number;
   /** Senha ainda é a provisória entregue pelo master — a API bloqueia tudo até a troca. */
   precisaTrocarSenha?: boolean;
+  /** Define o que é "hoje" para esta pessoa nos relatórios e no fechamento do dia (G10). */
+  timezone?: string;
+}
+
+/**
+ * Toda listagem que pode crescer responde neste formato (G13).
+ *
+ * Antes vinha um array cru e o cliente carregava a coleção inteira a cada
+ * refresh do painel.
+ */
+export interface Pagina<T> {
+  itens: T[];
+  total: number;
+  pagina: number;
+  limite: number;
+  totalPaginas: number;
+}
+
+/** `/tasks` devolve as fixas à parte: são no máximo 3 e não entram na paginação (G4). */
+export interface PaginaDeTasks extends Pagina<Task> {
+  especiais: Task[];
 }
 
 export interface Anexo {
@@ -56,6 +77,8 @@ export interface Task {
   /** Posição fixa (1..3) no rodapé — só em tasks especiais. */
   ordemFixa: number | null;
   arquivada: boolean;
+  /** Faturável ao cliente (G16). Sempre `false` em tasks ESPECIAL. */
+  faturavel: boolean;
   criador: Pick<User, 'id' | 'nome'> | null;
   gerente: Pick<User, 'id' | 'nome'> | null;
   anexos: Anexo[];
@@ -110,6 +133,150 @@ export interface UsuarioCongelado {
   expurgoEm: string;
   congeladoPorNome: string | null;
   diasRestantes: number;
+}
+
+// ---------------------------------------------------------------- Relatórios
+
+export interface FiltroRelatorio {
+  de: string;
+  ate: string;
+  userIds: string[];
+  empresa: string;
+  projeto: string;
+  status: Status | '';
+  severidade: Severidade | '';
+  incluirEspeciais: boolean;
+  /** '' = os dois; 'true' só faturável; 'false' só interno (G16). */
+  faturavel: '' | 'true' | 'false';
+}
+
+export interface ResumoDia {
+  dia: string;
+  segundos: number;
+  porPessoa: Array<{ nome: string; segundos: number }>;
+}
+
+export interface ResumoPessoa {
+  userId: string;
+  nome: string;
+  segundos: number;
+  segundosComuns: number;
+  segundosEspeciais: number;
+  /** Faturável ao cliente dentro do total desta pessoa (G16). */
+  segundosFaturaveis: number;
+  tasks: number;
+  lancamentos: number;
+  desligado: boolean;
+}
+
+export interface ResumoChave {
+  chave: string;
+  segundos: number;
+  tasks: number;
+}
+
+export interface LinhaRelatorio {
+  taskId: string;
+  codigo: string;
+  titulo: string;
+  empresa: string;
+  projeto: string;
+  tipo: TipoTask;
+  userId: string;
+  userNome: string;
+  status: Status;
+  severidade: Severidade;
+  /** Sempre `false` em tasks ESPECIAL (G16). */
+  faturavel: boolean;
+  horasEstimadas: number;
+  horasNoPeriodo: number;
+  horasAcumuladas: number;
+  dataFinal: string;
+  atrasada: boolean;
+  lancamentos: number;
+}
+
+export interface LancamentoRelatorio {
+  id: string;
+  dia: string;
+  inicio: string;
+  fim: string | null;
+  segundos: number;
+  userNome: string;
+  taskCodigo: string;
+  taskTitulo: string;
+  empresa: string;
+  projeto: string;
+  origem: TimeLog['origem'];
+  ajustadoPorNome: string | null;
+  motivoAjuste: string | null;
+}
+
+export interface Relatorio {
+  escopo: 'equipe' | 'individual';
+  titulo: string;
+  geradoEm: string;
+  timezone: string;
+  periodo: { de: string | null; ate: string | null };
+  filtros: {
+    empresa: string | null; projeto: string | null;
+    status: string | null; severidade: string | null; incluirEspeciais: boolean;
+    faturavel: boolean | null;
+  };
+  horas: {
+    totalSegundos: number;
+    comumSegundos: number;
+    especialSegundos: number;
+    /** Faturável ao cliente — sempre ⊆ comumSegundos (G16). */
+    faturavelSegundos: number;
+    naoFaturavelSegundos: number;
+    porDia: ResumoDia[];
+    porPessoa: ResumoPessoa[];
+    porProjeto: ResumoChave[];
+    porEmpresa: ResumoChave[];
+  };
+  linhas: LinhaRelatorio[];
+  /** Foto do backlog hoje — não muda com o período filtrado. */
+  situacao: {
+    totalTasks: number;
+    concluidas: number;
+    pendentes: number;
+    atrasadas: number;
+    horasEstimadas: number;
+    horasAcumuladas: number;
+    mediaRealVsEstimado: number;
+    porStatus: Record<string, number>;
+    porSeveridade: Record<string, number>;
+  };
+  lancamentos: LancamentoRelatorio[];
+  lancamentosTruncados: boolean;
+}
+
+// ---------------------------------------------------------------- Auditoria
+
+export interface EntradaAuditoria {
+  id: string;
+  atorId: string | null;
+  atorNome: string;
+  atorEmail: string;
+  acao: string;
+  acaoLabel: string;
+  entidade: string;
+  entidadeId: string;
+  antes: Record<string, unknown> | null;
+  depois: Record<string, unknown> | null;
+  ip: string | null;
+  requestId: string | null;
+  criadoEm: string;
+}
+
+export interface PaginaDeAuditoria extends Pagina<EntradaAuditoria> {
+  timezone: string;
+}
+
+export interface FacetasAuditoria {
+  acoes: Array<{ valor: string; total: number; label: string }>;
+  entidades: Array<{ valor: string; total: number }>;
 }
 
 export interface AuthResponse {

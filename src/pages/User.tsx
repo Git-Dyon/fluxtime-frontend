@@ -6,7 +6,7 @@ import { EspeciaisBar } from '../components/EspeciaisBar';
 import { TimeLogHistory } from '../components/TimeLogHistory';
 import { api, uploadFile, downloadFile } from '../lib/api';
 import { subscribeTaskEvents } from '../lib/socket';
-import type { Task, User } from '../lib/types';
+import type { PaginaDeTasks, Task, User } from '../lib/types';
 import { useNow } from '../hooks/useNow';
 import {
   calcMeusSegundos, deadlineClass, deadlineLabel, formatSeconds, formatHM,
@@ -43,8 +43,9 @@ export function User({ user, onLogout }: Props) {
   const [criando, setCriando] = useState(false);
 
   const load = useCallback(async () => {
-    const t = await api.get<Task[]>('/tasks');
-    setTasks(t);
+    // As fixas vêm fora da paginação (G4) — a barra do rodapé não é uma lista.
+    const t = await api.get<PaginaDeTasks>('/tasks?limite=200');
+    setTasks([...t.itens, ...t.especiais]);
   }, [user.id]);
 
   useEffect(() => { load(); }, [load]);

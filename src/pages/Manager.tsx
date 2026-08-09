@@ -5,9 +5,10 @@ import { BottomSheet } from '../components/BottomSheet';
 import { EspeciaisBar } from '../components/EspeciaisBar';
 import { TimeLogHistory } from '../components/TimeLogHistory';
 import { RequisicoesSheet } from '../components/RequisicoesSheet';
+import { RelatorioSheet } from '../components/RelatorioSheet';
 import { api, ApiError, uploadFile, downloadFile } from '../lib/api';
 import { subscribeTaskEvents } from '../lib/socket';
-import type { Requisicao, Task, User } from '../lib/types';
+import type { PaginaDeTasks, Requisicao, Task, User } from '../lib/types';
 import { useNow } from '../hooks/useNow';
 import {
   algumRodando, calcAtribuicaoSeconds, calcMeusSegundos, calcTotalSeconds,
@@ -16,14 +17,14 @@ import {
 } from '../lib/utils';
 import styles from './Manager.module.css';
 
-interface Props { user: User; onLogout: () => void; }
+interface Props { user: User; onLogout: () => void; onPerfilAtualizado?: () => void; }
 type Sheet = null | 'equipe' | 'monitor' | 'nova' | 'relatorio' | 'requisicoes' | 'especial' | 'corrigirDados';
 type Aba = 'inicio' | 'tasks';
 const ALL_STATUS = ['BACK_LOG','ATUANDO','EM_TESTES','LIBERADO_PARA_QA','DEPLOY','CONCLUIDO'] as const;
 const MAX_RESPONSAVEIS = 3;
 const MAX_ESPECIAIS = 3;
 
-export function Manager({ user, onLogout }: Props) {
+export function Manager({ user, onLogout, onPerfilAtualizado }: Props) {
   const now = useNow();
   const [aba, setAba] = useState<Aba>('inicio');
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -57,24 +58,23 @@ export function Manager({ user, onLogout }: Props) {
   const [fSev, setFSev] = useState<Task['severidade']>('MEDIA');
   const [fUserIds, setFUserIds] = useState<string[]>([]);
   const [fStatus, setFStatus] = useState<Task['status']>('BACK_LOG');
+  // G16: trabalho nasce faturável por padrão — a exceção é o interno.
+  const [fFaturavel, setFFaturavel] = useState(true);
   const [criando, setCriando] = useState(false);
   const [erroForm, setErroForm] = useState('');
 
   // Task especial
   const [especialTitulo, setEspecialTitulo] = useState('');
 
-  // Relatório
-  const [relEscopo, setRelEscopo] = useState<string>('equipe');
-  const [relFormato, setRelFormato] = useState<'pdf' | 'xlsx'>('pdf');
-  const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
 
   const load = useCallback(async () => {
     const [t, e, r] = await Promise.all([
-      api.get<Task[]>('/tasks'),
+      // As fixas vêm fora da paginação (G4): são no máximo 3 e ficam no rodapé.
+      api.get<PaginaDeTasks>('/tasks?limite=200'),
       api.get<User[]>(`/users/team/${user.id}`),
       api.get<Requisicao[]>('/requisicoes'),
     ]);
-    setTasks(t);
+    setTasks([...t.itens, ...t.especiais]);
     setEquipe(e);
     setRequisicoes(r);
   }, [user.id]);
@@ -175,13 +175,13 @@ export function Manager({ user, onLogout }: Props) {
       await api.post('/tasks', {
         titulo: fTitulo, descricao: fDesc, empresa: fEmpresa, projeto: fProjeto,
         horas: parseFloat(fHoras) || 1, dataFinal: fData,
-        severidade: fSev, status: fStatus,
+        severidade: fSev, status: fStatus, faturavel: fFaturavel,
         // Sem ninguém selecionado, a task fica para o próprio gerente.
         userIds: fUserIds.length > 0 ? fUserIds : [user.id],
       });
       setSheet(null);
       setFTitulo(''); setFDesc(''); setFEmpresa(''); setFProjeto('');
-      setFHoras('4'); setFData(''); setFSev('MEDIA'); setFUserIds([]); setFStatus('BACK_LOG');
+      setFHoras('4'); setFData(''); setFSev('MEDIA'); setFUserIds([]); setFStatus('BACK_LOG'); setFFaturavel(true);
       await load();
     } catch (e: any) {
       setErroForm(e instanceof ApiError ? e.message : 'Não foi possível criar a task.');
@@ -244,20 +244,6 @@ export function Manager({ user, onLogout }: Props) {
     setCorJustificativa('');
     setCorErro('');
     setSheet('corrigirDados');
-  };
-
-  const handleGerarRelatorio = async () => {
-    setGerandoRelatorio(true);
-    try {
-      if (relEscopo === 'equipe') {
-        await downloadFile(`/reports/team?format=${relFormato}`, `relatorio-equipe.${relFormato}`);
-      } else {
-        const membro = equipe.find(e => e.id === relEscopo);
-        const slug = (membro?.nome ?? relEscopo).toLowerCase().replace(/\s+/g, '-');
-        await downloadFile(`/reports/user/${relEscopo}?format=${relFormato}`, `relatorio-${slug}.${relFormato}`);
-      }
-      setSheet(null);
-    } finally { setGerandoRelatorio(false); }
   };
 
   const ativas = comuns.filter(t => t.status !== 'BACK_LOG' && t.status !== 'CONCLUIDO');
@@ -731,6 +717,13 @@ export function Manager({ user, onLogout }: Props) {
                 ))}
               </div>
             </div>
+            <div>
+              <span className={styles.fieldLabel}>Faturamento</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                <button className={`fx-chip ${fFaturavel ? 'active' : ''}`} onClick={() => setFFaturavel(true)}>Faturável ao cliente</button>
+                <button className={`fx-chip ${!fFaturavel ? 'active' : ''}`} onClick={() => setFFaturavel(false)}>Interno</button>
+              </div>
+            </div>
             {erroForm && <p style={{ fontSize: 11.5, color: 'var(--fx-error)', textAlign: 'center' }}>{erroForm}</p>}
             <button
               className="fx-btn-pill"
@@ -746,38 +739,12 @@ export function Manager({ user, onLogout }: Props) {
 
       {/* Sheet: Relatório */}
       {sheet === 'relatorio' && (
-        <BottomSheet onClose={() => setSheet(null)} title="Relatório">
-          <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <span className={styles.fieldLabel}>Escopo</span>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                <button className={`fx-chip ${relEscopo === 'equipe' ? 'active' : ''}`} onClick={() => setRelEscopo('equipe')}>
-                  Equipe inteira
-                </button>
-                {equipe.map(e => (
-                  <button key={e.id} className={`fx-chip ${relEscopo === e.id ? 'active' : ''}`} onClick={() => setRelEscopo(e.id)}>
-                    {e.nome}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <span className={styles.fieldLabel}>Formato</span>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <button className={`fx-chip ${relFormato === 'pdf' ? 'active' : ''}`} onClick={() => setRelFormato('pdf')}>PDF</button>
-                <button className={`fx-chip ${relFormato === 'xlsx' ? 'active' : ''}`} onClick={() => setRelFormato('xlsx')}>XLSX</button>
-              </div>
-            </div>
-            <button
-              className="fx-btn-pill"
-              style={{ width: '100%', height: 50, fontSize: 14, marginTop: 4 }}
-              onClick={handleGerarRelatorio}
-              disabled={gerandoRelatorio}
-            >
-              {gerandoRelatorio ? <div className="fx-spinner" /> : 'Baixar relatório'}
-            </button>
-          </div>
-        </BottomSheet>
+        <RelatorioSheet
+          timezone={user.timezone ?? 'America/Sao_Paulo'}
+          equipe={equipe}
+          onClose={() => setSheet(null)}
+          onPerfilAtualizado={onPerfilAtualizado}
+        />
       )}
     </>
   );

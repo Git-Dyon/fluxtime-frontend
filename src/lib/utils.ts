@@ -85,3 +85,89 @@ export function calcTotalSeconds(task: Task, now: number): number {
 export function algumRodando(task: Task): boolean {
   return task.atribuicoes.some((a) => a.rodando);
 }
+
+// ------------------------------------------------------------ Datas e fuso
+
+/**
+ * "AAAA-MM-DD" do dia de hoje no fuso informado.
+ *
+ * Os atalhos de período do relatório precisam concordar com o backend, que
+ * resolve as bordas do dia no fuso do usuário (G10). Usar `new Date()` local
+ * do navegador faria o botão "hoje" pedir o dia errado para quem viaja ou
+ * configurou outro fuso no perfil.
+ */
+export function diaEm(instante: Date, timezone: string): string {
+  try {
+    // en-CA formata como AAAA-MM-DD, que é exatamente o formato da API.
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(instante);
+  } catch {
+    return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(instante);
+  }
+}
+
+/** Desloca um dia "AAAA-MM-DD" em N dias, sem passar por fuso nenhum. */
+export function somarDias(dia: string, dias: number): string {
+  const [a, m, d] = dia.split('-').map(Number);
+  const base = new Date(Date.UTC(a, m - 1, d + dias));
+  return base.toISOString().slice(0, 10);
+}
+
+/** Primeiro dia do mês a que "AAAA-MM-DD" pertence. */
+export function primeiroDiaDoMes(dia: string): string {
+  return `${dia.slice(0, 7)}-01`;
+}
+
+/** "AAAA-MM-DD" → "DD/MM". Rótulo curto para eixo e listas densas. */
+export function diaCurto(dia: string): string {
+  const [, m, d] = dia.split('-');
+  return `${d}/${m}`;
+}
+
+/** "AAAA-MM-DD" → "DD/MM/AAAA". */
+export function diaBonito(dia: string): string {
+  const [a, m, d] = dia.split('-');
+  return `${d}/${m}/${a}`;
+}
+
+/** Instante ISO → "DD/MM/AAAA HH:MM" no fuso pedido. */
+export function dataHoraEm(iso: string, timezone: string): string {
+  const d = new Date(iso);
+  try {
+    return d.toLocaleString('pt-BR', {
+      timeZone: timezone, day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return d.toLocaleString('pt-BR');
+  }
+}
+
+export const ORIGEM_LABELS: Record<string, string> = {
+  CRONOMETRO: 'Cronômetro',
+  MANUAL: 'Lançamento manual',
+  AJUSTE_GERENTE: 'Ajuste do gerente',
+  AUTO_STOP: 'Encerrado pelo sistema',
+};
+
+/**
+ * Fusos oferecidos no seletor.
+ *
+ * Lista curta de propósito: o `Intl.supportedValuesOf('timeZone')` traz mais de
+ * 400 entradas e transforma uma preferência de dois cliques numa busca. O
+ * backend aceita qualquer identificador IANA — isto é só o atalho.
+ */
+export const FUSOS_COMUNS = [
+  { valor: 'America/Sao_Paulo', rotulo: 'São Paulo (BRT)' },
+  { valor: 'America/Manaus', rotulo: 'Manaus (AMT)' },
+  { valor: 'America/Rio_Branco', rotulo: 'Rio Branco (ACT)' },
+  { valor: 'America/Noronha', rotulo: 'Fernando de Noronha' },
+  { valor: 'America/New_York', rotulo: 'Nova York (ET)' },
+  { valor: 'America/Los_Angeles', rotulo: 'Los Angeles (PT)' },
+  { valor: 'Europe/Lisbon', rotulo: 'Lisboa (WET)' },
+  { valor: 'Europe/London', rotulo: 'Londres (GMT)' },
+  { valor: 'Europe/Berlin', rotulo: 'Berlim (CET)' },
+  { valor: 'Asia/Tokyo', rotulo: 'Tóquio (JST)' },
+  { valor: 'UTC', rotulo: 'UTC' },
+];
