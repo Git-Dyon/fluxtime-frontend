@@ -77,6 +77,8 @@ export interface Task {
   /** Posição fixa (1..3) no rodapé — só em tasks especiais. */
   ordemFixa: number | null;
   arquivada: boolean;
+  /** Faturável ao cliente (G16). Sempre `false` em tasks ESPECIAL. */
+  faturavel: boolean;
   criador: Pick<User, 'id' | 'nome'> | null;
   gerente: Pick<User, 'id' | 'nome'> | null;
   anexos: Anexo[];
@@ -144,6 +146,8 @@ export interface FiltroRelatorio {
   status: Status | '';
   severidade: Severidade | '';
   incluirEspeciais: boolean;
+  /** '' = os dois; 'true' só faturável; 'false' só interno (G16). */
+  faturavel: '' | 'true' | 'false';
 }
 
 export interface ResumoDia {
@@ -158,6 +162,8 @@ export interface ResumoPessoa {
   segundos: number;
   segundosComuns: number;
   segundosEspeciais: number;
+  /** Faturável ao cliente dentro do total desta pessoa (G16). */
+  segundosFaturaveis: number;
   tasks: number;
   lancamentos: number;
   desligado: boolean;
@@ -180,6 +186,8 @@ export interface LinhaRelatorio {
   userNome: string;
   status: Status;
   severidade: Severidade;
+  /** Sempre `false` em tasks ESPECIAL (G16). */
+  faturavel: boolean;
   horasEstimadas: number;
   horasNoPeriodo: number;
   horasAcumuladas: number;
@@ -213,11 +221,15 @@ export interface Relatorio {
   filtros: {
     empresa: string | null; projeto: string | null;
     status: string | null; severidade: string | null; incluirEspeciais: boolean;
+    faturavel: boolean | null;
   };
   horas: {
     totalSegundos: number;
     comumSegundos: number;
     especialSegundos: number;
+    /** Faturável ao cliente — sempre ⊆ comumSegundos (G16). */
+    faturavelSegundos: number;
+    naoFaturavelSegundos: number;
     porDia: ResumoDia[];
     porPessoa: ResumoPessoa[];
     porProjeto: ResumoChave[];

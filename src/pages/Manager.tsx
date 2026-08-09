@@ -58,6 +58,8 @@ export function Manager({ user, onLogout, onPerfilAtualizado }: Props) {
   const [fSev, setFSev] = useState<Task['severidade']>('MEDIA');
   const [fUserIds, setFUserIds] = useState<string[]>([]);
   const [fStatus, setFStatus] = useState<Task['status']>('BACK_LOG');
+  // G16: trabalho nasce faturável por padrão — a exceção é o interno.
+  const [fFaturavel, setFFaturavel] = useState(true);
   const [criando, setCriando] = useState(false);
   const [erroForm, setErroForm] = useState('');
 
@@ -173,13 +175,13 @@ export function Manager({ user, onLogout, onPerfilAtualizado }: Props) {
       await api.post('/tasks', {
         titulo: fTitulo, descricao: fDesc, empresa: fEmpresa, projeto: fProjeto,
         horas: parseFloat(fHoras) || 1, dataFinal: fData,
-        severidade: fSev, status: fStatus,
+        severidade: fSev, status: fStatus, faturavel: fFaturavel,
         // Sem ninguém selecionado, a task fica para o próprio gerente.
         userIds: fUserIds.length > 0 ? fUserIds : [user.id],
       });
       setSheet(null);
       setFTitulo(''); setFDesc(''); setFEmpresa(''); setFProjeto('');
-      setFHoras('4'); setFData(''); setFSev('MEDIA'); setFUserIds([]); setFStatus('BACK_LOG');
+      setFHoras('4'); setFData(''); setFSev('MEDIA'); setFUserIds([]); setFStatus('BACK_LOG'); setFFaturavel(true);
       await load();
     } catch (e: any) {
       setErroForm(e instanceof ApiError ? e.message : 'Não foi possível criar a task.');
@@ -713,6 +715,13 @@ export function Manager({ user, onLogout, onPerfilAtualizado }: Props) {
                 {ALL_STATUS.map(s => (
                   <button key={s} className={`fx-chip ${fStatus === s ? 'active' : ''}`} onClick={() => setFStatus(s)}>{STATUS_LABELS[s]}</button>
                 ))}
+              </div>
+            </div>
+            <div>
+              <span className={styles.fieldLabel}>Faturamento</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                <button className={`fx-chip ${fFaturavel ? 'active' : ''}`} onClick={() => setFFaturavel(true)}>Faturável ao cliente</button>
+                <button className={`fx-chip ${!fFaturavel ? 'active' : ''}`} onClick={() => setFFaturavel(false)}>Interno</button>
               </div>
             </div>
             {erroForm && <p style={{ fontSize: 11.5, color: 'var(--fx-error)', textAlign: 'center' }}>{erroForm}</p>}

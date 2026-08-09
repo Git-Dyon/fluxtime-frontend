@@ -56,6 +56,7 @@ function montarQuery(f: FiltroRelatorio): string {
   if (f.status) p.set('status', f.status);
   if (f.severidade) p.set('severidade', f.severidade);
   if (!f.incluirEspeciais) p.set('incluirEspeciais', 'false');
+  if (f.faturavel) p.set('faturavel', f.faturavel);
   const q = p.toString();
   return q ? `&${q}` : '';
 }
@@ -84,6 +85,7 @@ export function RelatorioSheet({ timezone: fusoInicial, equipe, onClose, onPerfi
     status: '',
     severidade: '',
     incluirEspeciais: true,
+    faturavel: '',
   }));
 
   const [relatorio, setRelatorio] = useState<Relatorio | null>(null);
@@ -233,6 +235,14 @@ export function RelatorioSheet({ timezone: fusoInicial, equipe, onClose, onPerfi
                     <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                   ))}
                 </select>
+                <select
+                  value={filtro.faturavel}
+                  onChange={(e) => setFiltro((f) => ({ ...f, faturavel: e.target.value as '' | 'true' | 'false' }))}
+                >
+                  <option value="">Faturável e interno</option>
+                  <option value="true">Só faturável</option>
+                  <option value="false">Só interno</option>
+                </select>
                 <label className={styles.check}>
                   <input
                     type="checkbox"
@@ -253,8 +263,8 @@ export function RelatorioSheet({ timezone: fusoInicial, equipe, onClose, onPerfi
             <div className={carregando ? styles.desbotado : undefined}>
               <div className={styles.cartoes}>
                 <Cartao rotulo="Horas no período" valor={formatHM(relatorio.horas.totalSegundos)} destaque />
-                <Cartao rotulo="Trabalho" valor={formatHM(relatorio.horas.comumSegundos)} />
-                <Cartao rotulo="Reuniões" valor={formatHM(relatorio.horas.especialSegundos)} />
+                <Cartao rotulo="Faturável" valor={formatHM(relatorio.horas.faturavelSegundos)} />
+                <Cartao rotulo="Interno" valor={formatHM(relatorio.horas.naoFaturavelSegundos)} />
                 <Cartao rotulo="Pessoas" valor={String(relatorio.horas.porPessoa.length)} />
               </div>
 
@@ -328,7 +338,7 @@ function PorPessoa({ relatorio }: { relatorio: Relatorio }) {
   return (
     <table className={styles.tabela}>
       <thead>
-        <tr><th>Pessoa</th><th>Trabalho</th><th>Reuniões</th><th>Total</th><th>%</th></tr>
+        <tr><th>Pessoa</th><th>Trabalho</th><th>Reuniões</th><th>Faturável</th><th>Total</th><th>%</th></tr>
       </thead>
       <tbody>
         {porPessoa.map((p) => (
@@ -339,6 +349,7 @@ function PorPessoa({ relatorio }: { relatorio: Relatorio }) {
             </td>
             <td>{formatHM(p.segundosComuns)}</td>
             <td>{formatHM(p.segundosEspeciais)}</td>
+            <td>{formatHM(p.segundosFaturaveis)}</td>
             <td><strong>{formatHM(p.segundos)}</strong></td>
             <td>{totalSegundos ? `${Math.round((p.segundos / totalSegundos) * 100)}%` : '—'}</td>
           </tr>
@@ -354,7 +365,7 @@ function PorTask({ relatorio }: { relatorio: Relatorio }) {
   return (
     <table className={styles.tabela}>
       <thead>
-        <tr><th>Task</th><th>Responsável</th><th>Estim.</th><th>Período</th><th>Acum.</th></tr>
+        <tr><th>Task</th><th>Responsável</th><th>$</th><th>Estim.</th><th>Período</th><th>Acum.</th></tr>
       </thead>
       <tbody>
         {relatorio.linhas.map((l) => (
@@ -364,6 +375,7 @@ function PorTask({ relatorio }: { relatorio: Relatorio }) {
               {l.atrasada && <span className={`${styles.tag} ${styles.tagAlerta}`}>atrasada</span>}
             </td>
             <td>{l.userNome}</td>
+            <td title={l.faturavel ? 'Faturável ao cliente' : 'Interno'}>{l.faturavel ? '✓' : '—'}</td>
             <td>{l.tipo === 'ESPECIAL' ? '—' : `${l.horasEstimadas.toFixed(1)}h`}</td>
             <td><strong>{l.horasNoPeriodo.toFixed(1)}h</strong></td>
             <td>{l.horasAcumuladas.toFixed(1)}h</td>
