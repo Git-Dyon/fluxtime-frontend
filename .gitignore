@@ -27,7 +27,6 @@ dist-ssr
 .env
 .env.local
 .env.development
-.env.production
 .env.test
 
 # IDE files
@@ -43,3 +42,9 @@ dist-ssr
 *.sln
 *.sw?
 
+
+# Gerado no build a partir de .env.production (scripts/gerar-config-electron.mjs)
+electron/config.cjs
+
+# Saída do electron-builder
+dist_electron

@@ -2,6 +2,10 @@
 const { app, BrowserWindow, ipcMain, session, shell } = require('electron');
 const path = require('path');
 
+// Gerado no build a partir de .env.production — a mesma origem que o Vite embute
+// no bundle. Ver scripts/gerar-config-electron.mjs.
+const config = require('./config.cjs');
+
 const isDev = process.env.NODE_ENV === 'development';
 
 // Origens que a janela pode carregar. Qualquer outra navegação é bloqueada e,
@@ -13,12 +17,19 @@ const ORIGENS_PERMITIDAS = isDev ? ['http://localhost:5173'] : ['file://'];
  *
  * Em dev o Vite injeta scripts inline e usa websocket para HMR, então precisa de
  * 'unsafe-inline' e ws:. Em produção o bundle é estático e a política é fechada.
+ *
+ * A origem vem de config.cjs, não de process.env: o app empacotado não tem `.env`
+ * e o processo main não enxerga o que o Vite embutiu no renderer. Lendo do
+ * ambiente, a CSP de produção caía em localhost e bloqueava a API inteira.
+ *
+ * `socketOrigin` aparece separado porque `wss:` é um esquema próprio para a CSP —
+ * `connect-src https://host` não o cobre de forma confiável, e sem ele o tempo
+ * real não conecta.
  */
 function politicaCsp() {
-  const api = process.env.VITE_API_URL || 'http://localhost:3741';
   const conecta = isDev
-    ? `'self' ${api} http://localhost:3741 ws://localhost:5173 ws://localhost:3741`
-    : `'self' ${api}`;
+    ? `'self' ${config.apiOrigin} ${config.socketOrigin} http://localhost:3741 ws://localhost:5173 ws://localhost:3741`
+    : `'self' ${config.apiOrigin} ${config.socketOrigin}`;
 
   return [
     "default-src 'self'",

@@ -8,8 +8,11 @@
     "dev:vite": "vite",
     "dev:electron": "wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .",
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
+    "predev": "cross-env NODE_ENV=development node scripts/gerar-config-electron.mjs",
+    "prebuild": "node scripts/gerar-config-electron.mjs",
     "build": "tsc -b && vite build",
     "electron:build": "npm run build && electron-builder",
+    "icone": "node scripts/gerar-icone.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -29,7 +32,9 @@
     "electron": "^43.3.0",
     "electron-builder": "^26.15.3",
     "oxlint": "^1.75.0",
+    "png-to-ico": "^3.0.2",
     "sass": "^1.102.0",
+    "sharp": "^0.35.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
     "wait-on": "^9.1.0"
@@ -49,7 +54,17 @@
       "electron/**/*"
     ],
     "directories": {
-      "buildResources": "public"
-    }
+      "buildResources": "public",
+      "output": "dist_electron"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "FluxTime"
+    },
+    "artifactName": "FluxTime-Setup-${version}.${ext}"
   }
 }
