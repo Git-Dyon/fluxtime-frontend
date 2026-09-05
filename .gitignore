@@ -48,3 +48,4 @@ electron/config.cjs
 
 # Saída do electron-builder
 dist_electron
+.claude/settings.json
