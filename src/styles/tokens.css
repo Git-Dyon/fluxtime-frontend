@@ -12,6 +12,22 @@
 
    Antes de clarear qualquer `--fx-text-*` ou cor de semáforo, rode
    `npm run contraste` — ele reprova o build.
+
+   SOBRE OS NÍVEIS 3, 4 E 5 TEREM A MESMA COR
+   ------------------------------------------
+   Não é descuido. Todo uso destes tokens no projeto está entre 8,5px e 13px —
+   conferido arquivo por arquivo. A WCAG só dispensa 4,5:1 para texto GRANDE
+   (≥18,66px em negrito, ou ≥24px), então nada aqui se qualifica: os três
+   precisam de 4,5:1 como qualquer texto corrido.
+
+   Sobre esta superfície, 4,5:1 é atingido no limite em #646b78. Não existe
+   tom mais claro que ainda passe, então não há como ter um 4º e um 5º nível
+   de esmaecimento abaixo do 3º e manter a legibilidade. Em vez de fingir uma
+   hierarquia que o olho não resolve e a norma reprova, os níveis colapsam, e a
+   diferenciação fica com o tamanho e o peso — que é de onde ela já vinha na
+   prática (rótulo de 9px/600 em caixa alta contra texto de 13px/400).
+
+   `--fx-text-5` não é usado em nenhum CSS hoje.
    ============================================================ */
 
 :root {
@@ -25,12 +41,12 @@
   /* --- Texto --- */
   --fx-text-1:      #4a5260;   /* texto primário */
   --fx-text-2:      #5a626e;   /* texto secundário */
-  --fx-text-3:      #6b7280;   /* labels / terciário */
-  --fx-text-4:      #767d88;   /* desabilitado leve */
-  --fx-text-5:      #7d848f;   /* texto vazio */
+  --fx-text-3:      #646b78;   /* labels / terciário */
+  --fx-text-4:      #646b78;   /* desabilitado leve */
+  --fx-text-5:      #646b78;   /* texto vazio */
   --fx-text-dis:    #9aa1ab;   /* desabilitado */
   --fx-text-input:  #5f666f;   /* texto em input */
-  --fx-placeholder: #7f8690;   /* placeholder */
+  --fx-placeholder: #646b78;   /* placeholder */
 
   /* --- Semáforo de prazo / severidade --- */
   --fx-green:       #2f6b43;

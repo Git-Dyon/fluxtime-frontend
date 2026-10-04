@@ -45,24 +45,15 @@ button,
    Estava zerada (`width: 0; display: none`) numa janela fixa de 420×800 — o
    scroll funcionava, mas nada na tela dizia que havia conteúdo abaixo, e as
    listas de task e o histórico passam da altura com facilidade. Fina e
-   discreta mantém o visual e devolve a pista de que há mais para ver. */
+   discreta mantém o visual e devolve a pista de que há mais para ver.
+
+   Só as propriedades padrão: no Chromium, declarar `scrollbar-width` e
+   `scrollbar-color` desativa os pseudo-elementos `::-webkit-scrollbar-*` no
+   mesmo elemento. As regras `-webkit-` que acompanhavam isto nunca chegavam a
+   se aplicar — davam a impressão de controlar largura e hover, sem efeito. */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--fx-text-4) transparent;
-}
-*::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-*::-webkit-scrollbar-thumb {
-  background: var(--fx-text-4);
-  border-radius: 3px;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--fx-text-2);
 }
 
 a {

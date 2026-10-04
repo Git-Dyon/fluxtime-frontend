@@ -51,49 +51,75 @@ function lerDoEnv(arquivo, chave) {
 }
 
 /**
- * Mesma precedência que o Vite aplica no `loadEnv`: `.env.production.local`
- * ganha de `.env.production`. Sem isto o bundle e a CSP liam arquivos
- * diferentes — que é justamente a divergência que este script existe para
- * impedir.
+ * Precedência do Vite, do mais forte para o mais fraco.
+ *
+ * A lista precisa ser COMPLETA, não "a parte que importa". A versão anterior
+ * tinha só `.env.production.local` e `.env.production`, deixando `.env.local`
+ * de fora — e no Vite `.env.local` ganha de `.env.production`. Um
+ * desenvolvedor com `.env.local` apontando para localhost geraria um
+ * instalador cujo BUNDLE chama localhost enquanto este script, a CSP e as
+ * travas de produção veem a URL do Render e aprovam. É o mesmo defeito já
+ * corrigido para `.env.production.local`, pelo único arquivo que a correção
+ * não cobria.
+ *
+ * `.env` entra no fim: hoje é inerte, porque perde para `.env.production` —
+ * mas ele define `VITE_API_URL` em localhost, então a mina está carregada.
  */
 const arquivosDeOrigem = ehProducao
-  ? ['.env.production.local', '.env.production']
+  ? ['.env.production.local', '.env.local', '.env.production', '.env']
   : ['.env.development'];
 
-let arquivoDeOrigem = arquivosDeOrigem[0];
-let apiUrl = process.env.VITE_API_URL ?? null;
+/**
+ * As duas chaves são obrigatórias e independentes.
+ *
+ * O renderer lê `VITE_API_URL` em `src/lib/api.ts` e `VITE_SOCKET_URL` em
+ * `src/lib/socket.ts`, separadamente. Este script validava apenas a primeira e
+ * derivava a origem do socket dela. Consequência: preencher só a chave citada
+ * na mensagem de erro deixava `VITE_SOCKET_URL` com o placeholder, e o
+ * instalador saía com login funcionando e tempo real nunca conectando — meia
+ * falha, sem mensagem em lugar nenhum.
+ */
+function resolverChave(chave) {
+  if (process.env[chave]) return { valor: process.env[chave], arquivo: 'ambiente' };
 
-if (!apiUrl) {
   for (const arquivo of arquivosDeOrigem) {
-    const valor = lerDoEnv(arquivo, 'VITE_API_URL');
-    if (valor) {
-      apiUrl = valor;
-      arquivoDeOrigem = arquivo;
-      break;
-    }
+    const valor = lerDoEnv(arquivo, chave);
+    if (valor) return { valor, arquivo };
+  }
+  return { valor: null, arquivo: arquivosDeOrigem.join(', ') };
+}
+
+function exigirUrlUtilizavel(chave) {
+  const { valor, arquivo } = resolverChave(chave);
+
+  if (!valor) {
+    console.error(`❌ ${chave} não encontrada em ${arquivo} nem no ambiente.`);
+    process.exit(1);
+  }
+
+  if (valor.includes('<') || valor.includes('>')) {
+    console.error(
+      `❌ ${arquivo} ainda está com o placeholder em ${chave}: "${valor}"\n` +
+        '   Troque <SEU-APP> pela URL pública do backend antes de compilar.\n' +
+        '   Atenção: VITE_API_URL e VITE_SOCKET_URL são duas linhas separadas.',
+    );
+    process.exit(1);
+  }
+
+  try {
+    return { url: valor, origem: new URL(valor).origin, arquivo };
+  } catch {
+    console.error(`❌ ${chave} não é uma URL válida: "${valor}"`);
+    return process.exit(1);
   }
 }
 
-if (!apiUrl) {
-  console.error(`❌ VITE_API_URL não encontrada em ${arquivosDeOrigem.join(', ')} nem no ambiente.`);
-  process.exit(1);
-}
+const api = exigirUrlUtilizavel('VITE_API_URL');
+const socket = exigirUrlUtilizavel('VITE_SOCKET_URL');
 
-if (apiUrl.includes('<') || apiUrl.includes('>')) {
-  console.error(
-    `❌ ${arquivoDeOrigem} ainda está com o placeholder: "${apiUrl}"\n` +
-      '   Troque <SEU-APP> pela URL pública do backend antes de compilar.',
-  );
-  process.exit(1);
-}
-
-let origem;
-try {
-  origem = new URL(apiUrl).origin;
-} catch {
-  console.error(`❌ VITE_API_URL não é uma URL válida: "${apiUrl}"`);
-  process.exit(1);
-}
+const apiUrl = api.url;
+const arquivoDeOrigem = api.arquivo;
+const origem = api.origem;
 
 /**
  * Trava de segurança do build de produção.
@@ -111,30 +137,42 @@ if (ehProducao && ehSimulacao) {
       '   Este instalador só funciona na máquina que roda o backend. Não distribua.',
   );
 } else if (ehProducao) {
-  const ehLocal = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:|$)/i.test(origem);
-  if (ehLocal) {
-    console.error(
-      `❌ Build de produção com VITE_API_URL apontando para a máquina local: ${origem}\n` +
-        `   Ajuste ${arquivoDeOrigem} para a URL pública do backend antes de gerar o instalador.`,
-    );
-    process.exit(1);
-  }
-  if (!origem.startsWith('https://')) {
-    console.error(
-      `❌ Build de produção com backend em HTTP: ${origem}\n` +
-        '   O token de sessão trafega neste canal — precisa ser https://.',
-    );
-    process.exit(1);
+  // As travas valem para as DUAS origens. Aplicá-las só à da API deixava
+  // passar um VITE_SOCKET_URL em localhost ou em http: o app instalado logava
+  // normalmente e o tempo real nunca conectava, sem nada na tela explicando.
+  for (const [chave, alvo] of [
+    ['VITE_API_URL', api],
+    ['VITE_SOCKET_URL', socket],
+  ]) {
+    const ehLocal = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:|$)/i.test(alvo.origem);
+    if (ehLocal) {
+      console.error(
+        `❌ Build de produção com ${chave} apontando para a máquina local: ${alvo.origem}\n` +
+          `   Ajuste ${alvo.arquivo} para a URL pública do backend antes de gerar o instalador.`,
+      );
+      process.exit(1);
+    }
+    if (!alvo.origem.startsWith('https://')) {
+      console.error(
+        `❌ Build de produção com ${chave} em HTTP: ${alvo.origem}\n` +
+          '   O token de sessão trafega neste canal — precisa ser https://.',
+      );
+      process.exit(1);
+    }
   }
 }
 
 // O Socket.IO usa transporte websocket. A CSP trata ws/wss como esquema próprio,
 // então `connect-src https://host` não cobre `wss://host` de forma confiável
 // entre versões do Chromium: a origem do socket vai listada à parte.
-const origemSocket = origem.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
+//
+// Derivada de VITE_SOCKET_URL, não de VITE_API_URL: as duas são configuradas
+// em linhas separadas e podem apontar para hosts diferentes. Derivar da API
+// fazia a CSP liberar um host e o renderer tentar outro.
+const origemSocket = socket.origem.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
 
 const conteudo = `// GERADO por scripts/gerar-config-electron.mjs — não edite à mão.
-// Origem: ${arquivoDeOrigem} (VITE_API_URL)
+// Origem: ${arquivoDeOrigem} (VITE_API_URL) e ${socket.arquivo} (VITE_SOCKET_URL)
 module.exports = {
   apiUrl: ${JSON.stringify(apiUrl)},
   apiOrigin: ${JSON.stringify(origem)},
@@ -143,4 +181,4 @@ module.exports = {
 `;
 
 writeFileSync(resolve(RAIZ, 'electron', 'config.cjs'), conteudo, 'utf8');
-console.log(`✓ electron/config.cjs gerado — API em ${origem}`);
+console.log(`✓ electron/config.cjs gerado — API em ${origem}, socket em ${origemSocket}`);

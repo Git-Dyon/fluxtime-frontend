@@ -26,9 +26,15 @@ const TOKEN_DE_FUNDO = '--fx-surface';
 /**
  * Limiar por token.
  *
- * 4,5:1 é o mínimo da norma para texto normal; 3,0:1 vale para texto grande e
- * para elementos de interface. Os tokens terciários ficam em 3,0 porque só
- * aparecem em rótulo pequeno sobre área ampla, nunca em corpo de texto.
+ * Todos em 4,5:1, o mínimo da norma para texto normal.
+ *
+ * A primeira versão disto colocava os tokens terciários em 3,0 e 4,0, no
+ * raciocínio de que "só aparecem em rótulo pequeno". O raciocínio estava
+ * invertido: a dispensa de 3,0:1 da WCAG vale para texto GRANDE (≥18,66px em
+ * negrito ou ≥24px), não para texto pequeno. Conferido uso por uso, todo
+ * `--fx-text-3` e `--fx-text-4` do projeto está entre 8,5px e 13px — ou seja,
+ * texto normal, sem dispensa nenhuma. Eram 61 ocorrências aprovando um limiar
+ * que a norma não concede, e o relatório dizia "aprovados".
  *
  * `--fx-text-dis` está ausente de propósito: texto desabilitado é isento na
  * norma, e precisa continuar lendo como desabilitado.
@@ -36,11 +42,11 @@ const TOKEN_DE_FUNDO = '--fx-surface';
 const LIMIARES = {
   '--fx-text-1': 4.5,
   '--fx-text-2': 4.5,
-  '--fx-text-3': 4.0,
-  '--fx-text-4': 3.0,
-  '--fx-text-5': 3.0,
+  '--fx-text-3': 4.5,
+  '--fx-text-4': 4.5,
+  '--fx-text-5': 4.5,
   '--fx-text-input': 4.5,
-  '--fx-placeholder': 3.0,
+  '--fx-placeholder': 4.5,
   '--fx-accent': 4.5,
   '--fx-error': 4.5,
   '--fx-green': 4.5,
@@ -112,4 +118,10 @@ if (reprovados.length > 0) {
   process.exit(1);
 }
 
-console.log(`\n✅ ${Object.keys(LIMIARES).length} tokens aprovados.\n`);
+// A mensagem diz contra o que foi conferido, não só "aprovados": a versão
+// anterior dizia "13 tokens aprovados" enquanto três deles passavam por um
+// limiar abaixo do que a norma exige para o tamanho em que são usados.
+console.log(
+  `\n✅ ${Object.keys(LIMIARES).length} tokens em 4,5:1 ou mais — WCAG 2.1 AA para texto normal.` +
+    '\n   --fx-text-dis fica fora da conferência: texto desabilitado é isento na norma.\n',
+);
