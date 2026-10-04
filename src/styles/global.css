@@ -1,5 +1,7 @@
 @import './tokens.css';
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+/* Fonte servida pelo próprio app. O @import remoto que existia aqui era
+   bloqueado pela CSP do Electron no app empacotado — ver src/styles/fontes.css. */
+@import './fontes.css';
 
 /* ============================================================
    Reset global
@@ -22,18 +24,45 @@ body {
   color: var(--fx-text-1);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Conteúdo selecionável. `user-select: none` ficava aqui e impedia copiar
+     código de task, e-mail ou total de horas — justamente o que alguém precisa
+     colar num chamado ou numa planilha. A barra de título e os controles
+     continuam não-selecionáveis, logo abaixo. */
+  user-select: text;
+}
+
+/* Cromo da interface não é texto: não deve selecionar nem atrapalhar o arraste. */
+button,
+.fx-navbar,
+[role='button'] {
   user-select: none;
 }
 
-/* Scrollbar invisível (scroll funciona, barra não aparece) */
+/* ============================================================
+   Barra de rolagem
+   ============================================================
+   Estava zerada (`width: 0; display: none`) numa janela fixa de 420×800 — o
+   scroll funcionava, mas nada na tela dizia que havia conteúdo abaixo, e as
+   listas de task e o histórico passam da altura com facilidade. Fina e
+   discreta mantém o visual e devolve a pista de que há mais para ver. */
 * {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--fx-text-4) transparent;
 }
 *::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--fx-text-4);
+  border-radius: 3px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--fx-text-2);
 }
 
 a {

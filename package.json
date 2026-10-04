@@ -10,9 +10,12 @@
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
     "predev": "cross-env NODE_ENV=development node scripts/gerar-config-electron.mjs",
     "prebuild": "node scripts/gerar-config-electron.mjs",
-    "build": "tsc -b && vite build",
+    "build": "npm run contraste && tsc -b && vite build",
     "electron:build": "npm run build && electron-builder",
     "icone": "node scripts/gerar-icone.mjs",
+    "contraste": "node scripts/conferir-contraste.mjs",
+    "conferir-build": "node scripts/conferir-build.mjs",
+    "postbuild": "node scripts/conferir-build.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

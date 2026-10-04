@@ -1,5 +1,17 @@
 /* ============================================================
    FluxTime Design Tokens — Neumorfismo
+   ============================================================
+
+   Os tons de texto e as cores de semáforo foram escurecidos para passar o
+   contraste mínimo da WCAG 2.1 AA. A paleta anterior reprovava em 10 dos 13
+   tokens conferidos — o texto primário em 4,08:1, contra o mínimo de 4,5:1 —
+   e as piores eram as cores de prazo e severidade, que carregam significado.
+
+   O neumorfismo vem das SUPERFÍCIES e das SOMBRAS, não de texto apagado:
+   `--shadow-*`, `--radius-*` e as superfícies estão intactos de propósito.
+
+   Antes de clarear qualquer `--fx-text-*` ou cor de semáforo, rode
+   `npm run contraste` — ele reprova o build.
    ============================================================ */
 
 :root {
@@ -11,20 +23,20 @@
   --fx-divider:     rgba(163, 177, 198, 0.22); /* 1px */
 
   /* --- Texto --- */
-  --fx-text-1:      #6b7280;   /* texto primário */
-  --fx-text-2:      #8a9099;   /* texto secundário */
-  --fx-text-3:      #aab0ba;   /* labels / terciário */
-  --fx-text-4:      #b0b6c0;   /* desabilitado leve */
-  --fx-text-5:      #b6bcc6;   /* texto vazio */
-  --fx-text-dis:    #c2c8d1;   /* desabilitado */
+  --fx-text-1:      #4a5260;   /* texto primário */
+  --fx-text-2:      #5a626e;   /* texto secundário */
+  --fx-text-3:      #6b7280;   /* labels / terciário */
+  --fx-text-4:      #767d88;   /* desabilitado leve */
+  --fx-text-5:      #7d848f;   /* texto vazio */
+  --fx-text-dis:    #9aa1ab;   /* desabilitado */
   --fx-text-input:  #5f666f;   /* texto em input */
-  --fx-placeholder: #a8aeb8;   /* placeholder */
+  --fx-placeholder: #7f8690;   /* placeholder */
 
   /* --- Semáforo de prazo / severidade --- */
-  --fx-green:       #4f9d69;
-  --fx-yellow:      #c9a227;
-  --fx-orange:      #cc7a33;
-  --fx-red:         #bc4f3c;
+  --fx-green:       #2f6b43;
+  --fx-yellow:      #7d5f00;
+  --fx-orange:      #9a4f14;
+  --fx-red:         #a33322;
 
   /* --- Sombras neumorfismo (relevo) --- */
   --shadow-window:   18px 18px 40px rgba(135, 149, 173, 0.75), -14px -14px 34px #ffffff;

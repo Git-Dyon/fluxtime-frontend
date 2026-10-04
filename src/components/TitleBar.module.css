@@ -6,6 +6,8 @@
   padding: 0 16px 0 20px;
   flex-shrink: 0;
   -webkit-app-region: drag;
+  /* Área de arraste da janela: selecionar texto aqui briga com o arraste. */
+  user-select: none;
 }
 
 .label {
