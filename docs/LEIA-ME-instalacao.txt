@@ -1,0 +1,89 @@
+===============================================================
+ FluxTime 1.0 — Instalacao no Windows
+===============================================================
+
+O QUE E
+-------
+Controle de horas por task, com cronometro, relatorios e historico.
+Funciona em rede: todos na equipe veem os mesmos dados.
+
+
+COMO INSTALAR
+-------------
+1. Execute o arquivo  FluxTime-Setup-1.0.0.exe
+
+2. O Windows vai mostrar uma tela azul dizendo
+   "O Windows protegeu o seu PC".
+
+   ISSO E ESPERADO. Nao significa virus.
+
+   Clique em  "Mais informacoes"  e depois em  "Executar assim mesmo".
+
+   Por que aparece: o programa nao tem assinatura digital paga
+   (um certificado custa a partir de uns US$ 200 por ano, e ficou
+   fora desta primeira versao). Sem assinatura, o Windows avisa sobre
+   qualquer programa novo, mesmo os legitimos.
+
+3. Escolha a pasta de instalacao (ou aceite a sugerida) e conclua.
+
+4. O atalho "FluxTime" aparece na area de trabalho e no menu Iniciar.
+
+
+PRIMEIRO ACESSO
+---------------
+Entre com o e-mail e a senha provisoria que o administrador passou.
+
+O sistema vai PEDIR para trocar a senha. Isso nao e opcional: a senha
+provisoria serve para um acesso so.
+
+Escolha uma senha que voce nao use em outro lugar.
+
+
+A PRIMEIRA ABERTURA DO DIA PODE DEMORAR
+---------------------------------------
+Se o programa ficar parado em "entrando..." por quase um minuto na
+primeira vez do dia, aguarde. O servidor hiberna quando ninguem usa,
+e a primeira pessoa que entra e quem o acorda. A partir dai fica
+rapido para todos.
+
+Se passar de dois minutos, ai sim algo esta errado — avise o
+administrador.
+
+
+O QUE FAZER SE
+--------------
+"Nao consigo entrar / usuario ou senha invalidos"
+   Confira se o e-mail esta correto. Depois de varias tentativas
+   erradas seguidas o sistema bloqueia por alguns minutos para
+   proteger a conta — espere e tente de novo.
+
+"Esqueci minha senha"
+   Nao ha recuperacao por e-mail nesta versao. Peca ao administrador
+   para redefinir. Ele gera uma nova senha provisoria.
+
+"O programa abriu mas nao carrega nada"
+   Verifique sua conexao com a internet. O FluxTime precisa dela para
+   funcionar — os dados ficam no servidor, nao na sua maquina.
+
+"Fui desconectado do nada"
+   Acontece quando sua senha e trocada ou sua conta e alterada pelo
+   administrador. Entre de novo.
+
+
+ATUALIZACOES
+------------
+Esta versao nao se atualiza sozinha. Quando sair uma nova, o
+administrador envia o instalador novo — basta executar por cima da
+versao atual. Seus dados ficam no servidor e nao se perdem.
+
+A versao esta no nome do arquivo (1.0.0).
+
+
+DESINSTALAR
+-----------
+Configuracoes do Windows > Aplicativos > FluxTime > Desinstalar.
+
+Desinstalar nao apaga nada do servidor: suas horas e tasks continuam
+lá e voltam a aparecer se voce instalar de novo.
+
+===============================================================
