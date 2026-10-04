@@ -49,3 +49,6 @@ electron/config.cjs
 # Saída do electron-builder
 dist_electron
 .claude/settings.json
+
+# Override local guardado (ver docs/LEIA-ME-env-local.txt)
+.env.producao-local.guardado
