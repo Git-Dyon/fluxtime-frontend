@@ -18,6 +18,16 @@ import { dirname, resolve } from 'node:path';
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ehProducao = process.env.NODE_ENV !== 'development';
 
+/**
+ * Build de simulação: libera backend em localhost/http.
+ *
+ * Existe para um caso só — validar a stack do docker-compose com o instalador
+ * de verdade, na mesma máquina. Fora disso as travas abaixo continuam valendo,
+ * porque um .exe distribuído apontando para localhost não funciona para
+ * ninguém além de quem compilou.
+ */
+const ehSimulacao = process.env.FLUXTIME_SIM === '1';
+
 /** Lê uma chave de um arquivo .env sem depender de pacote externo. */
 function lerDoEnv(arquivo, chave) {
   let conteudo;
@@ -40,11 +50,32 @@ function lerDoEnv(arquivo, chave) {
   return null;
 }
 
-const arquivoDeOrigem = ehProducao ? '.env.production' : '.env.development';
-const apiUrl = process.env.VITE_API_URL ?? lerDoEnv(arquivoDeOrigem, 'VITE_API_URL');
+/**
+ * Mesma precedência que o Vite aplica no `loadEnv`: `.env.production.local`
+ * ganha de `.env.production`. Sem isto o bundle e a CSP liam arquivos
+ * diferentes — que é justamente a divergência que este script existe para
+ * impedir.
+ */
+const arquivosDeOrigem = ehProducao
+  ? ['.env.production.local', '.env.production']
+  : ['.env.development'];
+
+let arquivoDeOrigem = arquivosDeOrigem[0];
+let apiUrl = process.env.VITE_API_URL ?? null;
 
 if (!apiUrl) {
-  console.error(`❌ VITE_API_URL não encontrada em ${arquivoDeOrigem} nem no ambiente.`);
+  for (const arquivo of arquivosDeOrigem) {
+    const valor = lerDoEnv(arquivo, 'VITE_API_URL');
+    if (valor) {
+      apiUrl = valor;
+      arquivoDeOrigem = arquivo;
+      break;
+    }
+  }
+}
+
+if (!apiUrl) {
+  console.error(`❌ VITE_API_URL não encontrada em ${arquivosDeOrigem.join(', ')} nem no ambiente.`);
   process.exit(1);
 }
 
@@ -70,8 +101,16 @@ try {
  * Empacotar um instalador apontando para a máquina de quem compilou é
  * exatamente o defeito que este script existe para impedir — e é invisível até
  * alguém instalar o .exe em outro computador.
+ *
+ * `FLUXTIME_SIM=1` é a única saída, e é explícita: quem digita a variável sabe
+ * que está gerando um build que só serve para testar a stack local.
  */
-if (ehProducao) {
+if (ehProducao && ehSimulacao) {
+  console.warn(
+    `⚠️  FLUXTIME_SIM=1 — build de SIMULAÇÃO, aceitando ${origem}.\n` +
+      '   Este instalador só funciona na máquina que roda o backend. Não distribua.',
+  );
+} else if (ehProducao) {
   const ehLocal = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:|$)/i.test(origem);
   if (ehLocal) {
     console.error(
