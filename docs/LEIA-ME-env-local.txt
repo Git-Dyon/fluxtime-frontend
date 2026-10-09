@@ -1,0 +1,27 @@
+Por que .env.production.local foi renomeado
+===========================================
+
+O arquivo virou:  .env.producao-local.guardado
+
+MOTIVO
+------
+O gerador de configuracao segue a mesma ordem de prioridade do Vite, e nela
+`.env.production.local` GANHA de `.env.production`. Ele apontava para
+http://localhost:3741, ou seja: o instalador sairia apontando para a maquina de
+quem compilou, e nao funcionaria para mais ninguem.
+
+O nome novo nao casa com nenhum padrao que o Vite carrega sozinho, entao o
+arquivo fica guardado sem interferir no build.
+
+PARA VOLTAR A TESTAR CONTRA UM BACKEND LOCAL
+--------------------------------------------
+  mv .env.producao-local.guardado .env.production.local
+  FLUXTIME_SIM=1 npm run electron:build
+
+O FLUXTIME_SIM=1 e obrigatorio: sem ele o build se recusa a empacotar
+apontando para localhost, de proposito.
+
+DEPOIS, PARA GERAR UM INSTALADOR DE VERDADE
+-------------------------------------------
+  mv .env.production.local .env.producao-local.guardado
+  npm run electron:build
