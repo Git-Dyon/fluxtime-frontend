@@ -8,17 +8,21 @@
     "dev:vite": "vite",
     "dev:electron": "wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .",
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
-    "build": "tsc -b && vite build",
+    "predev": "cross-env NODE_ENV=development node scripts/gerar-config-electron.mjs",
+    "prebuild": "node scripts/gerar-config-electron.mjs",
+    "build": "npm run contraste && tsc -b && vite build",
     "electron:build": "npm run build && electron-builder",
+    "icone": "node scripts/gerar-icone.mjs",
+    "contraste": "node scripts/conferir-contraste.mjs",
+    "conferir-build": "node scripts/conferir-build.mjs",
+    "postbuild": "node scripts/conferir-build.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.4",
-    "jsonwebtoken": "^9.0.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "socket.io-client": "^4.8.3",
-    "vue": "^3.5.41",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
@@ -31,7 +35,9 @@
     "electron": "^43.3.0",
     "electron-builder": "^26.15.3",
     "oxlint": "^1.75.0",
+    "png-to-ico": "^3.0.2",
     "sass": "^1.102.0",
+    "sharp": "^0.35.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
     "wait-on": "^9.1.0"
@@ -51,7 +57,17 @@
       "electron/**/*"
     ],
     "directories": {
-      "buildResources": "public"
-    }
+      "buildResources": "public",
+      "output": "dist_electron"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "FluxTime"
+    },
+    "artifactName": "FluxTime-Setup-${version}.${ext}"
   }
 }

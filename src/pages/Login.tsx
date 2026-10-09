@@ -1,12 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TitleBar } from '../components/TitleBar';
-import { api, setToken } from '../lib/api';
+import { api } from '../lib/api';
 import type { AuthResponse } from '../lib/types';
 import styles from './Login.module.css';
 
 interface Props {
-  onLogin: (user: AuthResponse['user'], token: string) => void;
+  onLogin: (user: AuthResponse['user'], token: string, manterLogado: boolean) => void;
 }
+
+/**
+ * Depois de quanto tempo de espera o login explica o que está acontecendo.
+ *
+ * O backend roda num plano que hiberna sem tráfego: a primeira requisição depois
+ * de um período parado espera a instância subir, o que passa de meio minuto. Sem
+ * aviso, um spinner parado esse tempo todo parece app travado — e a pessoa fecha
+ * a janela justamente enquanto o servidor acorda.
+ */
+const MS_ATE_AVISAR_DEMORA = 3_000;
 
 export function Login({ onLogin }: Props) {
   const [email, setEmail] = useState('');
@@ -14,7 +24,15 @@ export function Login({ onLogin }: Props) {
   const [showPass, setShowPass] = useState(false);
   const [keepLogged, setKeepLogged] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [acordandoServidor, setAcordandoServidor] = useState(false);
   const [aviso, setAviso] = useState('');
+
+  const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Uma resposta que chega depois da janela ser fechada deixaria o timer vivo.
+  useEffect(() => () => {
+    if (temporizador.current) clearTimeout(temporizador.current);
+  }, []);
 
   const handleLogin = async () => {
     if (loading) return;
@@ -24,14 +42,15 @@ export function Login({ onLogin }: Props) {
     }
     setLoading(true);
     setAviso('');
+    temporizador.current = setTimeout(() => setAcordandoServidor(true), MS_ATE_AVISAR_DEMORA);
     try {
       const data = await api.post<AuthResponse>('/auth/login', { email, senha });
-      setToken(data.token);
-      if (keepLogged) localStorage.setItem('fx_token', data.token);
-      onLogin(data.user, data.token);
+      onLogin(data.user, data.token, keepLogged);
     } catch (e: any) {
       setAviso(e.message || 'Erro ao autenticar.');
     } finally {
+      if (temporizador.current) clearTimeout(temporizador.current);
+      setAcordandoServidor(false);
       setLoading(false);
     }
   };
@@ -110,7 +129,16 @@ export function Login({ onLogin }: Props) {
 
         {/* Ações */}
         <div className={styles.actions}>
-          <a href="#" className={styles.forgotLink} onClick={(e) => e.preventDefault()}>
+          {/* Reset é feito pelo Manager Master (G7 da auditoria: o autoatendimento
+              por e-mail entra na V2, quando houver serviço de envio configurado). */}
+          <a
+            href="#"
+            className={styles.forgotLink}
+            onClick={(e) => {
+              e.preventDefault();
+              setAviso('Peça ao seu gerente ou ao administrador para redefinir a sua senha.');
+            }}
+          >
             Esqueci a minha senha
           </a>
           <button
@@ -137,7 +165,13 @@ export function Login({ onLogin }: Props) {
 
         {/* Aviso */}
         <div className={styles.avisoArea}>
-          {aviso && <span className={styles.aviso}>{aviso}</span>}
+          {acordandoServidor ? (
+            <span className={styles.aviso}>
+              Acordando o servidor… a primeira entrada do dia pode levar até 1 minuto.
+            </span>
+          ) : (
+            aviso && <span className={styles.aviso}>{aviso}</span>
+          )}
         </div>
       </div>
 

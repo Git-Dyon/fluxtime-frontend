@@ -309,3 +309,90 @@
 .sairBtn:active {
   box-shadow: var(--shadow-inset-btn);
 }
+
+/* Badge de requisições pendentes no botão do topo */
+.btnComBadge {
+  position: relative;
+}
+
+.badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--fx-error);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Caixa de requisições (G2) */
+.reqCard {
+  border-radius: 18px;
+  background: var(--fx-surface);
+  box-shadow: var(--shadow-card);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reqTipo {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--fx-accent);
+}
+
+.reqTexto {
+  font-size: 12.5px;
+  color: var(--fx-text-1);
+  line-height: 1.5;
+}
+
+.reqPrazo {
+  font-size: 10.5px;
+  color: var(--fx-text-3);
+}
+
+.reqPrazoUrgente {
+  color: var(--fx-error);
+  font-weight: 600;
+}
+
+.reqAcoes {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.reqStatus {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--fx-text-3);
+}
+
+/* Responsáveis de uma task com mais de um (G3) */
+.responsavelRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.responsavelNome {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--fx-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
